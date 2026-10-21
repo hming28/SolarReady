@@ -52,6 +52,19 @@ const DEFAULT_BENCHMARKS: SavedProject[] = [
     updatedAt: "Verified Benchmark",
     isBenchmark: true,
   },
+  {
+    id: "sample_setia_indah",
+    title: "Setia Indah 2-Storey Terrace",
+    houseType: "2-Storey Linked Terrace",
+    location: "Setia Indah, Setia Alam, Selangor",
+    capacityKwp: 5.5,
+    panelCount: 10,
+    costRm: 19250,
+    annualSavingsRm: 3450,
+    paybackYears: 5.6,
+    updatedAt: "Verified Benchmark",
+    isBenchmark: true,
+  },
 ];
 
 export default function UploadPage() {

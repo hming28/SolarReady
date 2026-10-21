@@ -1,0 +1,410 @@
+{
+  "id": "sample_setia_indah",
+  "created_at": "2026-10-21T02:11:38.993361+00:00",
+  "title": "Setia Indah 2-Storey Terrace",
+  "monthly_bill_rm": null,
+  "updated_at": "Oct 21, 2026",
+  "is_saved": true,
+  "location": {
+    "text": "Setia Indah, Setia Alam, Selangor",
+    "lat": 3.1,
+    "lon": 101.45
+  },
+  "house_type": "2-Storey Linked Terrace",
+  "image": {
+    "filename": "sample_setia_indah.jpg",
+    "path": "data/sample_roofs/sample_setia_indah.jpg",
+    "width_px": 126,
+    "height_px": 261,
+    "sha256": "03c48dcb159a97550e099e95f85cfdbbbabc907206e4d2dda13dd612b245be8a"
+  },
+  "is_demo": true,
+  "consent": {
+    "image_use": true,
+    "timestamp": "2026-10-21T02:11:38.980Z"
+  },
+  "geometry": {
+    "roof_polygons_px": [
+      [
+        [
+          67.0,
+          137.0
+        ],
+        [
+          63.0,
+          143.0
+        ],
+        [
+          12.0,
+          138.0
+        ],
+        [
+          16.0,
+          197.0
+        ],
+        [
+          22.0,
+          195.0
+        ],
+        [
+          27.0,
+          206.0
+        ],
+        [
+          59.0,
+          212.0
+        ],
+        [
+          89.0,
+          207.0
+        ],
+        [
+          100.0,
+          197.0
+        ],
+        [
+          98.0,
+          140.0
+        ]
+      ],
+      [
+        [
+          67.0,
+          48.0
+        ],
+        [
+          53.0,
+          49.0
+        ],
+        [
+          51.0,
+          53.0
+        ],
+        [
+          50.0,
+          49.0
+        ],
+        [
+          18.0,
+          49.0
+        ],
+        [
+          17.0,
+          53.0
+        ],
+        [
+          14.0,
+          49.0
+        ],
+        [
+          13.0,
+          136.0
+        ],
+        [
+          33.0,
+          136.0
+        ],
+        [
+          33.0,
+          122.0
+        ],
+        [
+          37.0,
+          116.0
+        ],
+        [
+          64.0,
+          117.0
+        ],
+        [
+          68.0,
+          136.0
+        ],
+        [
+          97.0,
+          135.0
+        ],
+        [
+          99.0,
+          49.0
+        ],
+        [
+          95.0,
+          53.0
+        ],
+        [
+          93.0,
+          49.0
+        ],
+        [
+          91.0,
+          53.0
+        ],
+        [
+          90.0,
+          49.0
+        ]
+      ]
+    ],
+    "obstacles": [],
+    "scale": {
+      "method": "known_line",
+      "metres_per_pixel": 0.0694,
+      "reference_px": null,
+      "reference_m": 5.0,
+      "quality_tier": "approx_map_measure",
+      "notes": "Quick scale preset (~0.0694 m/px)"
+    },
+    "roof_area_m2": 59.61,
+    "roof_area_px2": 12377.5,
+    "tilt_deg": 15.0,
+    "faces_metrics": [
+      {
+        "index": 1,
+        "is_valid": true,
+        "area_px2": 5687.5,
+        "planar_area_m2": 27.39,
+        "true_area_m2": 28.36,
+        "length_m": 5.96,
+        "width_m": 5.25,
+        "perimeter_m": 20.96,
+        "aspect_ratio": 1.14,
+        "azimuth_deg": 178,
+        "slope_direction": "South-facing"
+      },
+      {
+        "index": 2,
+        "is_valid": true,
+        "area_px2": 6690,
+        "planar_area_m2": 32.22,
+        "true_area_m2": 33.36,
+        "length_m": 6.15,
+        "width_m": 5.9,
+        "perimeter_m": 27.43,
+        "aspect_ratio": 1.04,
+        "azimuth_deg": 270.7,
+        "slope_direction": "West-facing"
+      }
+    ],
+    "roof_material": null,
+    "estimated_pitch_deg": null,
+    "pitch_confidence_range": null,
+    "pitch_reasoning": null,
+    "canvas_rotation_deg": 0.0
+  },
+  "layout": {
+    "panels": [
+      {
+        "index": 1,
+        "x_m": 1.611,
+        "y_m": 10.397,
+        "w_m": 2.278,
+        "h_m": 1.134,
+        "rotation_deg": 0.0,
+        "x_px": 23.2,
+        "y_px": 149.8,
+        "w_px": 32.8,
+        "h_px": 16.3
+      },
+      {
+        "index": 2,
+        "x_m": 3.909,
+        "y_m": 10.397,
+        "w_m": 2.278,
+        "h_m": 1.134,
+        "rotation_deg": 0.0,
+        "x_px": 56.3,
+        "y_px": 149.8,
+        "w_px": 32.8,
+        "h_px": 16.3
+      },
+      {
+        "index": 3,
+        "x_m": 1.611,
+        "y_m": 11.551,
+        "w_m": 2.278,
+        "h_m": 1.134,
+        "rotation_deg": 0.0,
+        "x_px": 23.2,
+        "y_px": 166.4,
+        "w_px": 32.8,
+        "h_px": 16.3
+      },
+      {
+        "index": 4,
+        "x_m": 3.909,
+        "y_m": 11.551,
+        "w_m": 2.278,
+        "h_m": 1.134,
+        "rotation_deg": 0.0,
+        "x_px": 56.3,
+        "y_px": 166.4,
+        "w_px": 32.8,
+        "h_px": 16.3
+      },
+      {
+        "index": 5,
+        "x_m": 1.593,
+        "y_m": 4.087,
+        "w_m": 2.278,
+        "h_m": 1.134,
+        "rotation_deg": 0.0,
+        "x_px": 23.0,
+        "y_px": 58.9,
+        "w_px": 32.8,
+        "h_px": 16.3
+      },
+      {
+        "index": 6,
+        "x_m": 3.891,
+        "y_m": 4.087,
+        "w_m": 2.278,
+        "h_m": 1.134,
+        "rotation_deg": 0.0,
+        "x_px": 56.1,
+        "y_px": 58.9,
+        "w_px": 32.8,
+        "h_px": 16.3
+      },
+      {
+        "index": 7,
+        "x_m": 1.593,
+        "y_m": 5.241,
+        "w_m": 2.278,
+        "h_m": 1.134,
+        "rotation_deg": 0.0,
+        "x_px": 23.0,
+        "y_px": 75.5,
+        "w_px": 32.8,
+        "h_px": 16.3
+      },
+      {
+        "index": 8,
+        "x_m": 3.891,
+        "y_m": 5.241,
+        "w_m": 2.278,
+        "h_m": 1.134,
+        "rotation_deg": 0.0,
+        "x_px": 56.1,
+        "y_px": 75.5,
+        "w_px": 32.8,
+        "h_px": 16.3
+      },
+      {
+        "index": 9,
+        "x_m": 1.593,
+        "y_m": 6.395,
+        "w_m": 2.278,
+        "h_m": 1.134,
+        "rotation_deg": 0.0,
+        "x_px": 23.0,
+        "y_px": 92.1,
+        "w_px": 32.8,
+        "h_px": 16.3
+      },
+      {
+        "index": 10,
+        "x_m": 3.891,
+        "y_m": 6.395,
+        "w_m": 2.278,
+        "h_m": 1.134,
+        "rotation_deg": 0.0,
+        "x_px": 56.1,
+        "y_px": 92.1,
+        "w_px": 32.8,
+        "h_px": 16.3
+      }
+    ],
+    "panel_count": 10,
+    "capacity_kwp": 5.5,
+    "module_area_m2": 25.83,
+    "usable_area_m2": 42.03,
+    "roof_area_m2": 59.61,
+    "params": {
+      "setback_m": 0.4,
+      "obstacle_buffer_m": 0.3,
+      "orientation": "optimal",
+      "max_capacity_kwp": null,
+      "active_facet_indices": [
+        1,
+        0
+      ],
+      "allow_estimated_scale": true,
+      "arrays": null
+    },
+    "geometry_valid": true,
+    "unplaced_reasons": [],
+    "facet_layouts": [
+      {
+        "facet_index": 0,
+        "slope_direction": "South-facing",
+        "panel_count": 4,
+        "capacity_kwp": 2.2,
+        "area_m2": 27.4,
+        "enabled": true
+      },
+      {
+        "facet_index": 1,
+        "slope_direction": "West-facing",
+        "panel_count": 6,
+        "capacity_kwp": 3.3,
+        "area_m2": 32.2,
+        "enabled": true
+      }
+    ],
+    "scale_fallback_applied": false,
+    "scale_m_per_px": 0.0694
+  },
+  "energy": {
+    "source": "FALLBACK_SAMPLE",
+    "retrieved_at": "2026-10-21T15:01:51.835417+00:00",
+    "specific_yield_kwh_per_kwp": {
+      "low": 1274.2,
+      "base": 1385.0,
+      "high": 1468.1
+    },
+    "annual_generation_kwh": {
+      "low": 7008.1,
+      "base": 7617.5,
+      "high": 8074.5
+    },
+    "finance": {
+      "cost_rm": 19250.0,
+      "cost_per_kwp_rm": 3500.0,
+      "self_use_pct": 60.0,
+      "tariff_rm_per_kwh": 0.4443,
+      "export_rate_rm_per_kwh": 0.2703,
+      "annual_self_consumption_kwh": {
+        "low": 4204.9,
+        "base": 4570.5,
+        "high": 4844.7
+      },
+      "annual_export_kwh": {
+        "low": 2803.2,
+        "base": 3047.0,
+        "high": 3229.8
+      },
+      "annual_savings_rm": {
+        "low": 2625.94,
+        "base": 2854.28,
+        "high": 3025.52
+      },
+      "payback_years": {
+        "low": 6.4,
+        "base": 6.7,
+        "high": 7.3
+      }
+    },
+    "policy_status": "verified_peninsular",
+    "assumptions": [
+      "System losses estimated at 14.0% (inverter efficiency, wiring, thermal coefficient, soiling)",
+      "Roof tilt assumed at 10.0\u00b0 optimal for equatorial latitude, facing south",
+      "TNB domestic retail tariff avoided (self-consumption offset): RM 0.4443/kWh",
+      "Solar ATAP export credit rate applied (energy charge only): RM 0.2703/kWh",
+      "Self-consumption ratio: 60%",
+      "Turnkey installation benchmark: RM 3,500.00/kWp",
+      "Solar irradiance sourced from SEDA / Peninsular Malaysia historical benchmarks"
+    ],
+    "disclaimer": "Preliminary estimate only. Not an engineering sign-off, structural guarantee, or commercial quotation. Requires physical site survey by an SEDA-certified PV installer."
+  }
+}
