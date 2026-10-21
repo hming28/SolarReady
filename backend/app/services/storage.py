@@ -33,12 +33,30 @@ class StorageService:
                 data = json.load(f)
                 return Assessment(**data)
 
-        # Check sample roofs directory
+        # Check sample roofs directory by exact filename
         sample_path = SAMPLE_ROOFS_DIR / f"{assessment_id}.json"
         if sample_path.exists():
             with open(sample_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return Assessment(**data)
+
+        # Fallback: scan all sample files by internal id or alias
+        for p in SAMPLE_ROOFS_DIR.glob("*.json"):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if data.get("id") == assessment_id:
+                        return Assessment(**data)
+            except Exception:
+                continue
+
+        # Explicit alias for Elmina demo
+        if assessment_id in ("demo-elmina-terrace-01", "sample_elmina_terrace"):
+            for alt_name in ("demo-elmina-terrace-01.json", "sample_elmina_terrace.json"):
+                alt_p = SAMPLE_ROOFS_DIR / alt_name
+                if alt_p.exists():
+                    with open(alt_p, "r", encoding="utf-8") as f:
+                        return Assessment(**json.load(f))
 
         return None
 
