@@ -15,16 +15,23 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Configure CORS for local Next.js frontend
-allowed_origins = os.getenv(
-    "CORS_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000"
-).split(",")
+# Configure CORS for Next.js frontend (local dev, Vercel deployments, and custom domains)
+cors_env = os.getenv("CORS_ORIGINS", "")
+allowed_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://solar-ready.vercel.app",
+    "https://solarready.vercel.app",
+]
+if cors_env:
+    for o in cors_env.split(","):
+        if o.strip() and o.strip() not in allowed_origins:
+            allowed_origins.append(o.strip())
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in allowed_origins if origin.strip()],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|https://[a-zA-Z0-9\-_]+\.vercel\.app|https://.*\.onrender\.com)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
