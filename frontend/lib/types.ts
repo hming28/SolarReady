@@ -100,6 +100,8 @@ export interface RoofGeometry {
   estimated_pitch_deg?: number | null;
   pitch_confidence_range?: [number, number] | null;
   pitch_reasoning?: string | null;
+  model_name?: string | null;
+  fallback_notice?: string | null;
   canvas_rotation_deg?: number;
 }
 
@@ -383,6 +385,8 @@ export interface GeminiDetectResponse {
   estimated_pitch_deg?: number;
   pitch_confidence_range?: [number, number];
   pitch_reasoning?: string;
+  fallback_notice?: string;
+  model_used?: string;
 }
 
 export interface CropRequest {

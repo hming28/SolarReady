@@ -25,6 +25,7 @@ class SegmentationResult(BaseModel):
     estimated_pitch_deg: Optional[float] = None
     pitch_confidence_range: Optional[List[float]] = None
     pitch_reasoning: Optional[str] = None
+    fallback_notice: Optional[str] = None
 
 
 @router.post("/segment", response_model=SegmentationResult)
@@ -297,6 +298,10 @@ async def gemini_detect_roof(assessment_id: str = Query(...)):
                 assessment.geometry.pitch_confidence_range = res["pitch_confidence_range"]
             if res.get("pitch_reasoning"):
                 assessment.geometry.pitch_reasoning = res["pitch_reasoning"]
+            if res.get("model_name"):
+                assessment.geometry.model_name = res["model_name"]
+            if res.get("fallback_notice"):
+                assessment.geometry.fallback_notice = res["fallback_notice"]
 
             assessment.geometry.faces_metrics = [
                 {
@@ -318,6 +323,7 @@ async def gemini_detect_roof(assessment_id: str = Query(...)):
             estimated_pitch_deg=res.get("estimated_pitch_deg"),
             pitch_confidence_range=res.get("pitch_confidence_range"),
             pitch_reasoning=res.get("pitch_reasoning"),
+            fallback_notice=res.get("fallback_notice"),
         )
     except Exception as e:
         err_msg = str(e).strip() if str(e).strip() else type(e).__name__

@@ -69,6 +69,8 @@ export default function EditorPage() {
     pitch?: number;
     confidenceRange?: [number, number];
     reasoning?: string;
+    modelUsed?: string;
+    fallbackNotice?: string;
   } | null>(null);
   const [roofAnalysis, setRoofAnalysis] = useState<RoofAnalysisResponse | null>(null);
 
@@ -99,13 +101,16 @@ export default function EditorPage() {
           if (
             geom.estimated_pitch_deg !== undefined ||
             geom.pitch_reasoning ||
-            geom.roof_material
+            geom.roof_material ||
+            geom.fallback_notice
           ) {
             setGeminiPitchInsight({
               material: geom.roof_material || undefined,
               pitch: geom.estimated_pitch_deg ?? geom.tilt_deg ?? undefined,
               confidenceRange: (geom.pitch_confidence_range as [number, number]) || undefined,
               reasoning: geom.pitch_reasoning || undefined,
+              modelUsed: geom.model_name || undefined,
+              fallbackNotice: geom.fallback_notice || undefined,
             });
           }
         } else {
@@ -181,7 +186,7 @@ export default function EditorPage() {
       setGeminiProgress(100);
       setGeminiStatusText("Roof facets & pitch angle detected!");
 
-      if (res && (res.estimated_pitch_deg || res.pitch_reasoning || res.roof_material)) {
+      if (res && (res.estimated_pitch_deg !== undefined || res.pitch_reasoning || res.roof_material || res.fallback_notice)) {
         if (res.estimated_pitch_deg !== undefined && res.estimated_pitch_deg !== null) {
           setTiltDeg(res.estimated_pitch_deg);
         }
@@ -190,6 +195,8 @@ export default function EditorPage() {
           pitch: res.estimated_pitch_deg,
           confidenceRange: res.pitch_confidence_range,
           reasoning: res.pitch_reasoning,
+          modelUsed: res.model_name || res.model_used,
+          fallbackNotice: res.fallback_notice,
         });
       }
 
@@ -198,6 +205,8 @@ export default function EditorPage() {
           ...prev,
           roof_polygons_px: res.polygons_px,
           tilt_deg: res.estimated_pitch_deg ?? prev.tilt_deg,
+          model_name: res.model_name || res.model_used || prev.model_name,
+          fallback_notice: res.fallback_notice || prev.fallback_notice,
         }));
       } else {
         alert("Vision AI could not detect distinct facets. You can use SAM 2 Smart Click or Draw Cut Line to define facets.");
@@ -327,6 +336,8 @@ export default function EditorPage() {
         roof_material: geminiPitchInsight?.material,
         pitch_confidence_range: geminiPitchInsight?.confidenceRange,
         pitch_reasoning: geminiPitchInsight?.reasoning,
+        model_name: geminiPitchInsight?.modelUsed || geometry.model_name,
+        fallback_notice: geminiPitchInsight?.fallbackNotice || geometry.fallback_notice,
       };
       await api.updateGeometry(assessmentId, updatedGeometry);
       router.push(`/layout-sim/${assessmentId}`);
@@ -601,6 +612,12 @@ export default function EditorPage() {
                       &ldquo;{geminiPitchInsight.reasoning}&rdquo;
                     </p>
                   )}
+                  {geminiPitchInsight.modelUsed && (
+                    <div className="text-[9px] text-slate-400 flex items-center justify-between pt-1 border-t border-emerald-900/40">
+                      <span>Vision Model:</span>
+                      <span className="font-mono text-emerald-300 font-semibold">{geminiPitchInsight.modelUsed}</span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-700/60 text-[11px] text-slate-400 flex items-center justify-between">
@@ -615,6 +632,19 @@ export default function EditorPage() {
                     <Sparkles className={`w-3.5 h-3.5 ${isGeminiLoading ? "animate-spin" : ""}`} />
                     <span>{isGeminiLoading ? "Estimating..." : "Estimate with AI"}</span>
                   </button>
+                </div>
+              )}
+
+              {/* Fallback Notice Warning Banner if Gemini 3.5 Flash Lite was used */}
+              {geminiPitchInsight?.fallbackNotice && (
+                <div className="p-2.5 rounded-lg bg-amber-950/60 border border-amber-600/80 text-amber-200 text-[11px] space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>AI Model Cascade Fallback Notice</span>
+                  </div>
+                  <p className="text-[10px] text-amber-200/90 leading-relaxed">
+                    {geminiPitchInsight.fallbackNotice}
+                  </p>
                 </div>
               )}
 
@@ -730,6 +760,18 @@ export default function EditorPage() {
                     </div>
                     <p className="text-[9px] text-slate-300 italic truncate" title={geminiStatusText}>
                       {geminiStatusText}
+                    </p>
+                  </div>
+                )}
+
+                {geminiPitchInsight?.fallbackNotice && (
+                  <div className="p-2 rounded-lg bg-amber-950/70 border border-amber-600/70 text-amber-200 text-[10px] space-y-0.5 mt-2">
+                    <div className="flex items-center gap-1 font-bold text-amber-300">
+                      <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                      <span>Fallback Engine (Gemini 3.5 Flash Lite)</span>
+                    </div>
+                    <p className="text-[9px] text-amber-200/90 leading-tight">
+                      {geminiPitchInsight.fallbackNotice}
                     </p>
                   </div>
                 )}

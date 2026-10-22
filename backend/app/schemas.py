@@ -67,6 +67,7 @@ class ScaleCalibration(BaseModel):
 
 
 class RoofGeometry(BaseModel):
+    model_config = {"protected_namespaces": ()}
     roof_polygons_px: List[List[List[float]]] = Field(
         default_factory=list, description="Array of roof face polygons in pixels"
     )
@@ -84,6 +85,8 @@ class RoofGeometry(BaseModel):
     estimated_pitch_deg: Optional[float] = None
     pitch_confidence_range: Optional[List[float]] = None
     pitch_reasoning: Optional[str] = None
+    model_name: Optional[str] = None
+    fallback_notice: Optional[str] = None
     canvas_rotation_deg: float = Field(
         0.0,
         description="Cumulative clockwise rotation in degrees applied to level satellite imagery from True North"

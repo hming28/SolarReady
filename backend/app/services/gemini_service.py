@@ -16,44 +16,64 @@ from app.services.storage import storage_service
 class GeminiVisionService:
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or GEMINI_API_KEY
-        self.model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+        self.model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
         self.endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
 
-    async def _generate_content(self, client: httpx.AsyncClient, payload: dict) -> Tuple[dict, str]:
+    async def _generate_content(
+        self, client: httpx.AsyncClient, payload: dict
+    ) -> Tuple[dict, str, Optional[str]]:
         """
-        Calls Gemini API with primary model (gemini-3.8-flash).
-        If primary model encounters HTTP 429 quota exhaustion (e.g. 20 requests/day limit on free tier),
-        it gracefully falls back to gemini-3.5-flash-lite to ensure uninterrupted operation.
-        Returns (data, model_name_used).
+        Calls Gemini API with the user-specified 3-tier cascade:
+          1. Priority 1: gemini-3.8-flash (20 RPD) - Peak intelligence & precision
+          2. Priority 2: gemini-3.6-flash (20 RPD) - High intelligence secondary
+          3. Priority 3: gemini-3.5-flash-lite (500 RPD) - High-throughput fallback
+
+        If Priority 1 or 2 hit daily rate limit (429) or temporary demand spikes (503/500/404),
+        it seamlessly cascades to the next tier.
+        When falling back to gemini-3.5-flash-lite, returns an informative hint that accuracy
+        may be slightly lower because 3.8/3.6 reached daily limits.
         """
-        primary_model = self.model_name
-        fallback_models = ["gemini-3.5-flash-lite", "gemini-3.7-flash"]
-        candidates_models = [primary_model]
-        for fb in fallback_models:
-            if fb not in candidates_models:
-                candidates_models.append(fb)
+        candidates_models = [
+            "gemini-3.8-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash-lite",
+        ]
+        env_model = os.getenv("GEMINI_MODEL")
+        if env_model and env_model not in candidates_models:
+            candidates_models.insert(0, env_model)
 
         last_err = None
-        for m in candidates_models:
+        for idx, m in enumerate(candidates_models):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={self.api_key}"
             try:
                 resp = await client.post(url, json=payload)
                 if resp.status_code == 200:
-                    return resp.json(), m
+                    fallback_notice = None
+                    if m == "gemini-3.5-flash-lite" and idx > 0:
+                        fallback_notice = (
+                            "Notice: Using high-throughput Gemini 3.5 Flash Lite because higher-tier models "
+                            "(Gemini 3.8 / 3.6 Flash) have reached their daily quota (20 RPD) or high demand spikes. "
+                            "Detection accuracy & facet boundaries may be slightly lower; please review in the editor."
+                        )
+                    print(f"[GeminiVisionService] Successfully generated with model '{m}' (tier {idx + 1}).")
+                    return resp.json(), m, fallback_notice
                 elif resp.status_code == 429:
-                    print(f"[GeminiVisionService] Model '{m}' quota exhausted (HTTP 429). Attempting fallback...")
-                    last_err = f"Gemini model '{m}' quota exceeded (HTTP 429): {resp.text[:200]}"
+                    print(f"[GeminiVisionService] Model '{m}' quota exhausted (HTTP 429). Cascading to next model...")
+                    last_err = f"Gemini model '{m}' daily quota reached (HTTP 429): {resp.text[:200]}"
+                    continue
+                elif resp.status_code in (404, 500, 503):
+                    print(f"[GeminiVisionService] Model '{m}' returned status {resp.status_code}. Cascading to next model...")
+                    last_err = f"Gemini API ({m}) status {resp.status_code}: {resp.text[:200]}"
                     continue
                 else:
                     last_err = f"Gemini API ({m}) returned status {resp.status_code}: {resp.text[:200]}"
-                    if resp.status_code in (404, 503):
-                        continue
-                    break
+                    continue
             except Exception as e:
+                print(f"[GeminiVisionService] Request to '{m}' failed with exception: {e}. Cascading...")
                 last_err = str(e)
                 continue
 
-        raise RuntimeError(last_err or "Gemini API generation failed.")
+        raise RuntimeError(last_err or "Gemini API generation failed across all cascade tiers.")
 
     def _get_image_base64(self, assessment_id: str) -> Tuple[str, int, int]:
         assessment = storage_service.get_assessment(assessment_id)
@@ -177,7 +197,7 @@ Respond ONLY with the JSON object.
         timeout = httpx.Timeout(45.0, connect=10.0)
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                data, used_model = await self._generate_content(client, payload)
+                data, used_model, fallback_notice = await self._generate_content(client, payload)
                 candidates = data.get("candidates", [])
                 if not candidates or not candidates[0].get("content"):
                     raise RuntimeError("Gemini Vision API returned empty candidates.")
@@ -355,7 +375,9 @@ Respond ONLY with the JSON object.
             "polygons_px": cleaned_polygons,
             "faces_meta": faces_meta,
             "confidence": 0.96 if cleaned_polygons else 0.5,
-            "model_name": f"SolarReady AI Vision Engine",
+            "model_name": used_model,
+            "model_used": used_model,
+            "fallback_notice": fallback_notice,
         }
 
     async def recommend_layout(self, assessment_id: str) -> Dict[str, Any]:
@@ -484,7 +506,7 @@ Respond ONLY with a valid JSON object matching:
         timeout = httpx.Timeout(45.0, connect=15.0)
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                data, used_model = await self._generate_content(client, payload)
+                data, used_model, fallback_notice = await self._generate_content(client, payload)
                 candidates = data.get("candidates", [])
                 if candidates and candidates[0].get("content"):
                     text = candidates[0]["content"]["parts"][0]["text"]
