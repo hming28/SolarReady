@@ -1278,13 +1278,94 @@ export default function Roof3DViewer({
         isRidgeAlongZ = spanCentroidsX > spanCentroidsZ * 1.35;
       }
 
-      // Symmetrical Gable Roof Geometry:
-      // Centering the ridge at the geometric center ensures both slopes reach eaveHeight exactly,
-      // eliminating floating roof gaps, misaligned bargeboards, and exposed ceilings.
-      const slopeDepth = footprintD / 2.0;
-      const slopeWidth = footprintW / 2.0;
-      const slopeSpan = isRidgeAlongZ ? slopeWidth : slopeDepth;
-      const ridgeHeight = eaveHeight + slopeSpan * Math.tan(tiltRad);
+      // ---------------------------------------------------------
+      // True Proportional Ridge Position & Asymmetrical Slopes:
+      // Real roofs are rarely in the exact dead center (50/50).
+      // We detect the true boundary between the slopes from the polygons,
+      // and adapt the ridge position, slopes, gable walls, and panels proportionally.
+      // ---------------------------------------------------------
+      const polyBounds = rawPolys.map((poly) => {
+        const pxs = poly.map((pt) => pt[0] * mPerPx);
+        const pzs = poly.map((pt) => pt[1] * mPerPx);
+        return {
+          minX: Math.min(...pxs),
+          maxX: Math.max(...pxs),
+          minZ: Math.min(...pzs),
+          maxZ: Math.max(...pzs),
+          cenX: pxs.reduce((a, b) => a + b, 0) / (pxs.length || 1),
+          cenZ: pzs.reduce((a, b) => a + b, 0) / (pzs.length || 1),
+        };
+      });
+
+      let trueRidgeZ = centerZ;
+      let trueRidgeX = centerX;
+
+      if (isRidgeAlongZ) {
+        // Ridge along Z: find dividing line along X between Left and Right slopes
+        if (polyBounds.length >= 2) {
+          const sortedByX = [...polyBounds].sort((a, b) => a.cenX - b.cenX);
+          let bestGapIdx = 1;
+          let maxGap = -Infinity;
+          for (let i = 1; i < sortedByX.length; i++) {
+            const gap = sortedByX[i].cenX - sortedByX[i - 1].cenX;
+            if (gap > maxGap) {
+              maxGap = gap;
+              bestGapIdx = i;
+            }
+          }
+          const leftXs = sortedByX.slice(0, bestGapIdx).map((p) => p.maxX);
+          const rightXs = sortedByX.slice(bestGapIdx).map((p) => p.minX);
+          const maxLeftX = Math.max(...leftXs);
+          const minRightX = Math.min(...rightXs);
+          trueRidgeX = (maxLeftX + minRightX) / 2.0;
+        }
+        const minAllowedX = minX + footprintW * 0.15;
+        const maxAllowedX = minX + footprintW * 0.85;
+        trueRidgeX = Math.max(minAllowedX, Math.min(trueRidgeX, maxAllowedX));
+      } else {
+        // Ridge along X: find dividing line along Z between Rear (-Z) and Front (+Z) slopes
+        if (polyBounds.length >= 2) {
+          const sortedByZ = [...polyBounds].sort((a, b) => a.cenZ - b.cenZ);
+          let bestGapIdx = 1;
+          let maxGap = -Infinity;
+          for (let i = 1; i < sortedByZ.length; i++) {
+            const gap = sortedByZ[i].cenZ - sortedByZ[i - 1].cenZ;
+            if (gap > maxGap) {
+              maxGap = gap;
+              bestGapIdx = i;
+            }
+          }
+          const rearZs = sortedByZ.slice(0, bestGapIdx).map((p) => p.maxZ);
+          const frontZs = sortedByZ.slice(bestGapIdx).map((p) => p.minZ);
+          const maxRearZ = Math.max(...rearZs);
+          const minFrontZ = Math.min(...frontZs);
+          trueRidgeZ = (maxRearZ + minFrontZ) / 2.0;
+        }
+        const minAllowedZ = minZ + footprintD * 0.15;
+        const maxAllowedZ = minZ + footprintD * 0.85;
+        trueRidgeZ = Math.max(minAllowedZ, Math.min(trueRidgeZ, maxAllowedZ));
+      }
+
+      const ridgeSceneX = trueRidgeX - centerX;
+      const ridgeSceneZ = trueRidgeZ - centerZ;
+
+      // Proportional slope spans
+      const rearSpan = Math.max(0.5, ridgeSceneZ - (-footprintD / 2.0));
+      const frontSpan = Math.max(0.5, footprintD / 2.0 - ridgeSceneZ);
+      const leftSpan = Math.max(0.5, ridgeSceneX - (-footprintW / 2.0));
+      const rightSpan = Math.max(0.5, footprintW / 2.0 - ridgeSceneX);
+
+      const dominantSpan = isRidgeAlongZ
+        ? Math.max(leftSpan, rightSpan)
+        : Math.max(frontSpan, rearSpan);
+
+      const ridgeHeight = eaveHeight + dominantSpan * Math.tan(tiltRad);
+
+      // Independent pitch for each slope ensuring both eaves land EXACTLY at eaveHeight = 5.8m
+      const frontTiltRad = Math.atan((ridgeHeight - eaveHeight) / frontSpan);
+      const rearTiltRad = Math.atan((ridgeHeight - eaveHeight) / rearSpan);
+      const leftTiltRad = Math.atan((ridgeHeight - eaveHeight) / leftSpan);
+      const rightTiltRad = Math.atan((ridgeHeight - eaveHeight) / rightSpan);
 
       const overEave = 0.22;   // Overhang extending over gutters
       const overGable = 0.18;  // Overhang extending past gable walls
@@ -1314,7 +1395,7 @@ export default function Roof3DViewer({
 
       // ---------------------------------------------------------
       // B. Watertight Structural Base Roof (Solid Envelope)
-      // Guarantees zero holes or missing surfaces regardless of user polygon coverage
+      // True proportional asymmetrical gable slopes
       // ---------------------------------------------------------
       if (tiltDeg > 1.0) {
         const baseRoofGeom = new THREE.BufferGeometry();
@@ -1323,21 +1404,21 @@ export default function Roof3DViewer({
         const baseUvs: number[] = [];
 
         if (!isRidgeAlongZ) {
-          // Ridge runs along X at Z = 0, Y = ridgeHeight
+          // Ridge runs along X at Z = ridgeSceneZ, Y = ridgeHeight
           // Slopes fall to Front (+Z) and Rear (-Z)
           const x0 = -footprintW / 2 - overGable;
           const x1 = footprintW / 2 + overGable;
           const zFront = footprintD / 2 + overEave;
           const zRear = -footprintD / 2 - overEave;
-          const yEaveFront = eaveHeight - overEave * Math.tan(tiltRad);
-          const yEaveRear = eaveHeight - overEave * Math.tan(tiltRad);
+          const yEaveFront = eaveHeight - overEave * Math.tan(frontTiltRad);
+          const yEaveRear = eaveHeight - overEave * Math.tan(rearTiltRad);
 
-          const fn = new THREE.Vector3(0, Math.cos(tiltRad), Math.sin(tiltRad)).normalize();
-          const rn = new THREE.Vector3(0, Math.cos(tiltRad), -Math.sin(tiltRad)).normalize();
+          const fn = new THREE.Vector3(0, Math.cos(frontTiltRad), Math.sin(frontTiltRad)).normalize();
+          const rn = new THREE.Vector3(0, Math.cos(rearTiltRad), -Math.sin(rearTiltRad)).normalize();
 
-          // Front Slope (CCW winding when viewed from above-front)
-          const pF0 = [x0, ridgeHeight, 0];
-          const pF1 = [x1, ridgeHeight, 0];
+          // Front Slope (from Z = ridgeSceneZ down to zFront)
+          const pF0 = [x0, ridgeHeight, ridgeSceneZ];
+          const pF1 = [x1, ridgeHeight, ridgeSceneZ];
           const pF2 = [x1, yEaveFront, zFront];
           const pF3 = [x0, yEaveFront, zFront];
 
@@ -1347,9 +1428,9 @@ export default function Roof3DViewer({
             baseUvs.push((p[0] + 50) / 3.2, (p[2] + 50) / 3.2);
           });
 
-          // Rear Slope (CCW winding when viewed from above-rear)
-          const pR0 = [x0, ridgeHeight, 0];
-          const pR1 = [x1, ridgeHeight, 0];
+          // Rear Slope (from Z = ridgeSceneZ down to zRear)
+          const pR0 = [x0, ridgeHeight, ridgeSceneZ];
+          const pR1 = [x1, ridgeHeight, ridgeSceneZ];
           const pR2 = [x1, yEaveRear, zRear];
           const pR3 = [x0, yEaveRear, zRear];
 
@@ -1359,21 +1440,21 @@ export default function Roof3DViewer({
             baseUvs.push((p[0] + 50) / 3.2, (p[2] + 50) / 3.2);
           });
         } else {
-          // Ridge runs along Z at X = 0, Y = ridgeHeight
+          // Ridge runs along Z at X = ridgeSceneX, Y = ridgeHeight
           // Slopes fall to Left (-X) and Right (+X)
           const z0 = -footprintD / 2 - overGable;
           const z1 = footprintD / 2 + overGable;
           const xRight = footprintW / 2 + overEave;
           const xLeft = -footprintW / 2 - overEave;
-          const yEaveRight = eaveHeight - overEave * Math.tan(tiltRad);
-          const yEaveLeft = eaveHeight - overEave * Math.tan(tiltRad);
+          const yEaveRight = eaveHeight - overEave * Math.tan(rightTiltRad);
+          const yEaveLeft = eaveHeight - overEave * Math.tan(leftTiltRad);
 
-          const ln = new THREE.Vector3(-Math.sin(tiltRad), Math.cos(tiltRad), 0).normalize();
-          const rn = new THREE.Vector3(Math.sin(tiltRad), Math.cos(tiltRad), 0).normalize();
+          const ln = new THREE.Vector3(-Math.sin(leftTiltRad), Math.cos(leftTiltRad), 0).normalize();
+          const rn = new THREE.Vector3(Math.sin(rightTiltRad), Math.cos(rightTiltRad), 0).normalize();
 
-          // Left Slope
-          const pL0 = [0, ridgeHeight, z0];
-          const pL1 = [0, ridgeHeight, z1];
+          // Left Slope (from X = ridgeSceneX down to xLeft)
+          const pL0 = [ridgeSceneX, ridgeHeight, z0];
+          const pL1 = [ridgeSceneX, ridgeHeight, z1];
           const pL2 = [xLeft, yEaveLeft, z1];
           const pL3 = [xLeft, yEaveLeft, z0];
 
@@ -1383,9 +1464,9 @@ export default function Roof3DViewer({
             baseUvs.push((p[0] + 50) / 3.2, (p[2] + 50) / 3.2);
           });
 
-          // Right Slope
-          const pR0 = [0, ridgeHeight, z0];
-          const pR1 = [0, ridgeHeight, z1];
+          // Right Slope (from X = ridgeSceneX down to xRight)
+          const pR0 = [ridgeSceneX, ridgeHeight, z0];
+          const pR1 = [ridgeSceneX, ridgeHeight, z1];
           const pR2 = [xRight, yEaveRight, z1];
           const pR3 = [xRight, yEaveRight, z0];
 
@@ -1443,10 +1524,10 @@ export default function Roof3DViewer({
         return [polyNeg, polyPos];
       };
 
-      const splitValPx = isRidgeAlongZ ? centerX / mPerPx : centerZ / mPerPx;
+      const splitValPx = isRidgeAlongZ ? trueRidgeX / mPerPx : trueRidgeZ / mPerPx;
       const coordIdx = isRidgeAlongZ ? 0 : 1;
 
-      // Ensure any polygon spanning across the ridge line is split into individual planar slope facets
+      // Ensure any polygon spanning across the true ridge line is split into individual planar slope facets
       const effectivePolys: number[][][] = [];
       rawPolys.forEach((polyPx) => {
         if (polyPx.length < 3) return;
@@ -1454,8 +1535,8 @@ export default function Roof3DViewer({
         const minVal = Math.min(...vals);
         const maxVal = Math.max(...vals);
 
-        // If this polygon spans across the ridge line (with a margin, e.g. > 15px)
-        if (minVal < splitValPx - 15 && maxVal > splitValPx + 15) {
+        // If this polygon spans across the true ridge line
+        if (minVal < splitValPx - 10 && maxVal > splitValPx + 10) {
           const [neg, pos] = splitPolyByCoord(polyPx, coordIdx, splitValPx);
           if (neg.length >= 3) effectivePolys.push(neg);
           if (pos.length >= 3) effectivePolys.push(pos);
@@ -1475,9 +1556,20 @@ export default function Roof3DViewer({
           const xm = pt[0] * mPerPx - centerX;
           const zm = pt[1] * mPerPx - centerZ;
 
-          const distFromRidge = isRidgeAlongZ ? Math.abs(xm) : Math.abs(zm);
-          let ym = ridgeHeight - distFromRidge * Math.tan(tiltRad);
-          ym = Math.max(eaveHeight, Math.min(ym, ridgeHeight));
+          let ym = eaveHeight;
+          if (isRidgeAlongZ) {
+            const isWest = xm < ridgeSceneX;
+            const span = isWest ? leftSpan : rightSpan;
+            const distFromRidge = Math.abs(xm - ridgeSceneX);
+            const planeY = ridgeHeight - (distFromRidge / span) * (ridgeHeight - eaveHeight);
+            ym = Math.max(eaveHeight, Math.min(planeY, ridgeHeight));
+          } else {
+            const isRear = zm < ridgeSceneZ;
+            const span = isRear ? rearSpan : frontSpan;
+            const distFromRidge = Math.abs(zm - ridgeSceneZ);
+            const planeY = ridgeHeight - (distFromRidge / span) * (ridgeHeight - eaveHeight);
+            ym = Math.max(eaveHeight, Math.min(planeY, ridgeHeight));
+          }
           return new THREE.Vector3(xm, ym, zm);
         });
 
@@ -1570,22 +1662,22 @@ export default function Roof3DViewer({
         };
         if (isRidgeAlongZ) {
           const cap = rbox(0.3, 0.17, footprintD + overGable * 2, capMat, 0.06);
-          cap.position.set(0, ridgeHeight + 0.02, 0);
+          cap.position.set(ridgeSceneX, ridgeHeight + 0.02, 0);
           scene.add(cap);
           [-footprintD * 0.485, footprintD * 0.485].forEach((gz) => {
-            addBarge(scene, -footprintW * 0.48, eaveHeight, 0, ridgeHeight, gz);
-            addBarge(scene, 0, ridgeHeight, footprintW * 0.48, eaveHeight, gz);
+            addBarge(scene, -footprintW * 0.48, eaveHeight, ridgeSceneX, ridgeHeight, gz);
+            addBarge(scene, ridgeSceneX, ridgeHeight, footprintW * 0.48, eaveHeight, gz);
           });
         } else {
           const cap = rbox(footprintW + overGable * 2, 0.17, 0.3, capMat, 0.06);
-          cap.position.set(0, ridgeHeight + 0.02, 0);
+          cap.position.set(0, ridgeHeight + 0.02, ridgeSceneZ);
           scene.add(cap);
           [-footprintW * 0.485, footprintW * 0.485].forEach((gx) => {
             const bg = new THREE.Group();
             bg.rotation.y = Math.PI / 2;
             bg.position.x = gx;
-            addBarge(bg, -footprintD * 0.48, eaveHeight, 0, ridgeHeight, 0);
-            addBarge(bg, 0, ridgeHeight, footprintD * 0.48, eaveHeight, 0);
+            addBarge(bg, -footprintD * 0.48, eaveHeight, ridgeSceneZ, ridgeHeight, 0);
+            addBarge(bg, ridgeSceneZ, ridgeHeight, footprintD * 0.48, eaveHeight, 0);
             scene.add(bg);
           });
         }
@@ -1594,7 +1686,7 @@ export default function Roof3DViewer({
           [-footprintD * 0.478, footprintD * 0.478].forEach((gz) => {
             const gableShape = new THREE.Shape();
             gableShape.moveTo(-footprintW * 0.48, eaveHeight);
-            gableShape.lineTo(0, ridgeHeight);
+            gableShape.lineTo(ridgeSceneX, ridgeHeight);
             gableShape.lineTo(footprintW * 0.48, eaveHeight);
             gableShape.closePath();
 
@@ -1609,7 +1701,7 @@ export default function Roof3DViewer({
           [-footprintW * 0.478, footprintW * 0.478].forEach((gx) => {
             const gableShape = new THREE.Shape();
             gableShape.moveTo(-footprintD * 0.48, eaveHeight);
-            gableShape.lineTo(0, ridgeHeight);
+            gableShape.lineTo(ridgeSceneZ, ridgeHeight);
             gableShape.lineTo(footprintD * 0.48, eaveHeight);
             gableShape.closePath();
 
@@ -1663,21 +1755,27 @@ export default function Roof3DViewer({
 
         let distFromRidge = 0;
         let expectedNormal: THREE.Vector3;
+        let surfaceY = eaveHeight;
 
         if (isRidgeAlongZ) {
-          const isWest = pCenterX < 0;
+          const isWest = pCenterX < ridgeSceneX;
+          const span = isWest ? leftSpan : rightSpan;
+          const tilt = isWest ? leftTiltRad : rightTiltRad;
           const slopeDirX = isWest ? -1 : 1;
-          distFromRidge = Math.abs(pCenterX);
-          expectedNormal = new THREE.Vector3(slopeDirX * Math.sin(tiltRad), Math.cos(tiltRad), 0).normalize();
+          distFromRidge = Math.abs(pCenterX - ridgeSceneX);
+          expectedNormal = new THREE.Vector3(slopeDirX * Math.sin(tilt), Math.cos(tilt), 0).normalize();
+          const planeY = ridgeHeight - (distFromRidge / span) * (ridgeHeight - eaveHeight);
+          surfaceY = Math.max(eaveHeight, Math.min(planeY, ridgeHeight));
         } else {
-          const isRear = pCenterZ < 0;
+          const isRear = pCenterZ < ridgeSceneZ;
+          const span = isRear ? rearSpan : frontSpan;
+          const tilt = isRear ? rearTiltRad : frontTiltRad;
           const slopeDirZ = isRear ? -1 : 1;
-          distFromRidge = Math.abs(pCenterZ);
-          expectedNormal = new THREE.Vector3(0, Math.cos(tiltRad), slopeDirZ * Math.sin(tiltRad)).normalize();
+          distFromRidge = Math.abs(pCenterZ - ridgeSceneZ);
+          expectedNormal = new THREE.Vector3(0, Math.cos(tilt), slopeDirZ * Math.sin(tilt)).normalize();
+          const planeY = ridgeHeight - (distFromRidge / span) * (ridgeHeight - eaveHeight);
+          surfaceY = Math.max(eaveHeight, Math.min(planeY, ridgeHeight));
         }
-
-        const planeY = ridgeHeight - distFromRidge * Math.tan(tiltRad);
-        const surfaceY = Math.max(eaveHeight, Math.min(planeY, ridgeHeight));
 
         const panelGroup = new THREE.Group();
         // Position panel cleanly above roof surface (+0.09m realistic mounting rail standoff)
