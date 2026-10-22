@@ -1019,6 +1019,8 @@ export default function LayoutSimPage() {
                 geometry={assessment.geometry}
                 layout={layout}
                 imageUrl={imageUrl}
+                imageWidth={assessment.image?.width_px}
+                imageHeight={assessment.image?.height_px}
                 onSwitchTo2D={() => setViewMode("realistic")}
               />
             ) : (
