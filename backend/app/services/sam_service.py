@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
 import httpx
 from shapely.geometry import Polygon, MultiPolygon
-from app.config import STORAGE_DIR, ROBOFLOW_API_KEY
+from app.config import STORAGE_DIR, SAMPLE_ROOFS_DIR, ROBOFLOW_API_KEY
 from app.services.storage import storage_service
 from app.routers.geometry import split_polygon_along_ridge
 
@@ -27,10 +27,16 @@ class Sam2Service:
             raise ValueError(f"Assessment {assessment_id} not found.")
 
         image_path = STORAGE_DIR / f"{assessment_id}_working.jpg"
-        if not image_path.exists():
+        if not image_path.exists() and assessment.image and assessment.image.filename:
             image_path = STORAGE_DIR / f"{assessment_id}_orig_{assessment.image.filename}"
-        if not image_path.exists():
+        if not image_path.exists() and assessment.image and assessment.image.filename:
             image_path = STORAGE_DIR / f"{assessment.image.filename}"
+        if not image_path.exists() and assessment.image and assessment.image.filename:
+            image_path = SAMPLE_ROOFS_DIR / assessment.image.filename
+        if not image_path.exists():
+            image_path = SAMPLE_ROOFS_DIR / f"{assessment_id}.jpg"
+        if not image_path.exists():
+            image_path = SAMPLE_ROOFS_DIR / f"{assessment_id}.png"
 
         if not image_path.exists():
             raise FileNotFoundError(f"Image for assessment {assessment_id} not found on disk.")

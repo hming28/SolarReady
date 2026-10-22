@@ -9,7 +9,7 @@ import json
 from typing import List, Dict, Any, Optional, Tuple
 import httpx
 from shapely.geometry import Polygon, MultiPolygon
-from app.config import STORAGE_DIR, GEMINI_API_KEY
+from app.config import STORAGE_DIR, SAMPLE_ROOFS_DIR, GEMINI_API_KEY
 from app.services.storage import storage_service
 
 
@@ -36,6 +36,7 @@ class GeminiVisionService:
         candidates_models = [
             "gemini-3.8-flash",
             "gemini-3.6-flash",
+            "gemini-3.5-flash",
             "gemini-3.5-flash-lite",
         ]
         env_model = os.getenv("GEMINI_MODEL")
@@ -43,25 +44,40 @@ class GeminiVisionService:
             candidates_models.insert(0, env_model)
 
         last_err = None
+        had_503 = False
+        had_429 = False
+
         for idx, m in enumerate(candidates_models):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={self.api_key}"
             try:
                 resp = await client.post(url, json=payload)
                 if resp.status_code == 200:
                     fallback_notice = None
-                    if m == "gemini-3.5-flash-lite" and idx > 0:
-                        fallback_notice = (
-                            "Notice: Using high-throughput Gemini 3.5 Flash Lite because higher-tier models "
-                            "(Gemini 3.8 / 3.6 Flash) have reached their daily quota (20 RPD) or high demand spikes. "
-                            "Detection accuracy & facet boundaries may be slightly lower; please review in the editor."
-                        )
+                    if idx > 0:
+                        if had_503 and not had_429:
+                            fallback_notice = (
+                                f"Notice: Switched to {m} because higher-tier model(s) experienced a temporary "
+                                f"Google Cloud capacity demand spike (HTTP 503). Your daily quota has NOT been exceeded."
+                            )
+                        elif had_429:
+                            fallback_notice = (
+                                f"Notice: Using {m} because higher-tier model(s) reached their 20 RPD daily quota limit."
+                            )
+                        else:
+                            fallback_notice = f"Notice: Using {m} via automatic resilience cascade."
                     print(f"[GeminiVisionService] Successfully generated with model '{m}' (tier {idx + 1}).")
                     return resp.json(), m, fallback_notice
                 elif resp.status_code == 429:
+                    had_429 = True
                     print(f"[GeminiVisionService] Model '{m}' quota exhausted (HTTP 429). Cascading to next model...")
                     last_err = f"Gemini model '{m}' daily quota reached (HTTP 429): {resp.text[:200]}"
                     continue
-                elif resp.status_code in (404, 500, 503):
+                elif resp.status_code == 503:
+                    had_503 = True
+                    print(f"[GeminiVisionService] Model '{m}' Google demand spike (HTTP 503). Cascading to next model...")
+                    last_err = f"Gemini API ({m}) high demand spike (HTTP 503): {resp.text[:200]}"
+                    continue
+                elif resp.status_code in (404, 500):
                     print(f"[GeminiVisionService] Model '{m}' returned status {resp.status_code}. Cascading to next model...")
                     last_err = f"Gemini API ({m}) status {resp.status_code}: {resp.text[:200]}"
                     continue
@@ -81,10 +97,16 @@ class GeminiVisionService:
             raise ValueError(f"Assessment {assessment_id} not found.")
 
         image_path = STORAGE_DIR / f"{assessment_id}_working.jpg"
-        if not image_path.exists():
+        if not image_path.exists() and assessment.image and assessment.image.filename:
             image_path = STORAGE_DIR / f"{assessment_id}_orig_{assessment.image.filename}"
-        if not image_path.exists():
+        if not image_path.exists() and assessment.image and assessment.image.filename:
             image_path = STORAGE_DIR / f"{assessment.image.filename}"
+        if not image_path.exists() and assessment.image and assessment.image.filename:
+            image_path = SAMPLE_ROOFS_DIR / assessment.image.filename
+        if not image_path.exists():
+            image_path = SAMPLE_ROOFS_DIR / f"{assessment_id}.jpg"
+        if not image_path.exists():
+            image_path = SAMPLE_ROOFS_DIR / f"{assessment_id}.png"
 
         if not image_path.exists():
             raise FileNotFoundError(f"Image for assessment {assessment_id} not found on disk.")
