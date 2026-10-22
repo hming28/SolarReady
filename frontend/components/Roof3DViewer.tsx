@@ -1210,7 +1210,7 @@ export default function Roof3DViewer({
       // Heights in meters for typical Malaysian 2-storey terrace house (e.g. Elmina West)
       const eaveHeight = 5.8;
       const groundFloorH = 3.0;
-      const tiltDeg = geometry.tilt_deg || 15.0;
+      const tiltDeg = geometry.tilt_deg !== undefined && geometry.tilt_deg !== null ? geometry.tilt_deg : 15.0;
       const tiltRad = (tiltDeg * Math.PI) / 180.0;
 
       // ---------------------------------------------------------
@@ -1322,37 +1322,72 @@ export default function Roof3DViewer({
         scene.add(gutterBack);
       }
 
+      // Helper function to split a polygon across a straight cut line (Sutherland-Hodgman style)
+      const splitPolyByCoord = (
+        poly: number[][],
+        coordIdx: 0 | 1,
+        splitVal: number
+      ): [number[][], number[][]] => {
+        const polyNeg: number[][] = [];
+        const polyPos: number[][] = [];
+        const n = poly.length;
+        for (let i = 0; i < n; i++) {
+          const cur = poly[i];
+          const next = poly[(i + 1) % n];
+          const curVal = cur[coordIdx];
+          const nextVal = next[coordIdx];
+
+          if (curVal <= splitVal) polyNeg.push(cur);
+          if (curVal >= splitVal) polyPos.push(cur);
+
+          if ((curVal < splitVal && nextVal > splitVal) || (curVal > splitVal && nextVal < splitVal)) {
+            const t = (splitVal - curVal) / (nextVal - curVal);
+            const interPt = [
+              cur[0] + t * (next[0] - cur[0]),
+              cur[1] + t * (next[1] - cur[1]),
+            ];
+            polyNeg.push(interPt);
+            polyPos.push(interPt);
+          }
+        }
+        return [polyNeg, polyPos];
+      };
+
+      const splitValPx = isRidgeAlongZ ? trueRidgeX / mPerPx : trueRidgeZ / mPerPx;
+      const coordIdx = isRidgeAlongZ ? 0 : 1;
+
+      // Ensure any polygon spanning across the ridge line is split into individual planar slope facets
+      const effectivePolys: number[][][] = [];
+      rawPolys.forEach((polyPx) => {
+        if (polyPx.length < 3) return;
+        const vals = polyPx.map((pt) => pt[coordIdx]);
+        const minVal = Math.min(...vals);
+        const maxVal = Math.max(...vals);
+
+        // If this polygon spans across the ridge line (with a margin, e.g. > 15px)
+        if (minVal < splitValPx - 15 && maxVal > splitValPx + 15) {
+          const [neg, pos] = splitPolyByCoord(polyPx, coordIdx, splitValPx);
+          if (neg.length >= 3) effectivePolys.push(neg);
+          if (pos.length >= 3) effectivePolys.push(pos);
+        } else {
+          effectivePolys.push(polyPx);
+        }
+      });
+
       // Reconstruct each 3D Pitched Facet Mesh using True Mathematical Planar Slope
       const facetMeshes: THREE.Mesh[] = [];
 
-      rawPolys.forEach((polyPx, polyIdx) => {
+      effectivePolys.forEach((polyPx, polyIdx) => {
         if (polyPx.length < 3) return;
-
-        let isNegativeSide = false;
-        if (isRidgeAlongZ) {
-          const facetCenterX =
-            polyPx.reduce((sum, pt) => sum + (pt[0] * mPerPx - centerX), 0) / polyPx.length;
-          isNegativeSide = facetCenterX < ridgeSceneX;
-        } else {
-          const facetCenterZ =
-            polyPx.reduce((sum, pt) => sum + (pt[1] * mPerPx - centerZ), 0) / polyPx.length;
-          isNegativeSide = facetCenterZ < ridgeSceneZ;
-        }
 
         const pts3D = polyPx.map((pt) => {
           const xm = pt[0] * mPerPx - centerX;
           const zm = pt[1] * mPerPx - centerZ;
 
-          let distFromRidge = 0;
-          if (isRidgeAlongZ) {
-            distFromRidge = isNegativeSide
-              ? Math.max(0, ridgeSceneX - xm)
-              : Math.max(0, xm - ridgeSceneX);
-          } else {
-            distFromRidge = isNegativeSide
-              ? Math.max(0, ridgeSceneZ - zm)
-              : Math.max(0, zm - ridgeSceneZ);
-          }
+          const distFromRidge = isRidgeAlongZ
+            ? Math.abs(xm - ridgeSceneX)
+            : Math.abs(zm - ridgeSceneZ);
+
           let ym = ridgeHeight - distFromRidge * Math.tan(tiltRad);
           ym = Math.max(eaveHeight, Math.min(ym, ridgeHeight));
           return new THREE.Vector3(xm, ym, zm);
@@ -1407,16 +1442,16 @@ export default function Roof3DViewer({
         scene.add(edgeLines);
       });
 
-      // Triangular Gable End Walls
-      const gableMat = new THREE.MeshStandardMaterial({
-        color: preset.gable,
-        roughness: 0.75,
-        metalness: 0.08,
-        side: THREE.DoubleSide,
-      });
+      // Triangular Gable End Walls & Ridge Cap (Only rendered when pitch > 1° to properly support 0° Flat Roofs)
+      if (tiltDeg > 1.0) {
+        const gableMat = new THREE.MeshStandardMaterial({
+          color: preset.gable,
+          roughness: 0.75,
+          metalness: 0.08,
+          side: THREE.DoubleSide,
+        });
 
-      // Ridge cap + barge boards: the finishing details that make the roof read as "built"
-      {
+        // Ridge cap + barge boards: the finishing details that make the roof read as "built"
         const capMat = new THREE.MeshStandardMaterial({
           color: roofMat.color.clone().multiplyScalar(0.82),
           roughness: 0.6,
@@ -1457,39 +1492,39 @@ export default function Roof3DViewer({
             scene.add(bg);
           });
         }
-      }
 
-      if (isRidgeAlongZ) {
-        [-footprintD * 0.478, footprintD * 0.478].forEach((gz) => {
-          const gableShape = new THREE.Shape();
-          gableShape.moveTo(-footprintW * 0.48, eaveHeight);
-          gableShape.lineTo(ridgeSceneX, ridgeHeight);
-          gableShape.lineTo(footprintW * 0.48, eaveHeight);
-          gableShape.closePath();
+        if (isRidgeAlongZ) {
+          [-footprintD * 0.478, footprintD * 0.478].forEach((gz) => {
+            const gableShape = new THREE.Shape();
+            gableShape.moveTo(-footprintW * 0.48, eaveHeight);
+            gableShape.lineTo(ridgeSceneX, ridgeHeight);
+            gableShape.lineTo(footprintW * 0.48, eaveHeight);
+            gableShape.closePath();
 
-          const gableGeo = new THREE.ShapeGeometry(gableShape);
-          const gableMesh = new THREE.Mesh(gableGeo, gableMat);
-          gableMesh.position.z = gz;
-          gableMesh.castShadow = true;
-          gableMesh.receiveShadow = true;
-          scene.add(gableMesh);
-        });
-      } else {
-        [-footprintW * 0.478, footprintW * 0.478].forEach((gx) => {
-          const gableShape = new THREE.Shape();
-          gableShape.moveTo(-footprintD * 0.48, eaveHeight);
-          gableShape.lineTo(ridgeSceneZ, ridgeHeight);
-          gableShape.lineTo(footprintD * 0.48, eaveHeight);
-          gableShape.closePath();
+            const gableGeo = new THREE.ShapeGeometry(gableShape);
+            const gableMesh = new THREE.Mesh(gableGeo, gableMat);
+            gableMesh.position.z = gz;
+            gableMesh.castShadow = true;
+            gableMesh.receiveShadow = true;
+            scene.add(gableMesh);
+          });
+        } else {
+          [-footprintW * 0.478, footprintW * 0.478].forEach((gx) => {
+            const gableShape = new THREE.Shape();
+            gableShape.moveTo(-footprintD * 0.48, eaveHeight);
+            gableShape.lineTo(ridgeSceneZ, ridgeHeight);
+            gableShape.lineTo(footprintD * 0.48, eaveHeight);
+            gableShape.closePath();
 
-          const gableGeo = new THREE.ShapeGeometry(gableShape);
-          const gableMesh = new THREE.Mesh(gableGeo, gableMat);
-          gableMesh.rotation.y = Math.PI / 2;
-          gableMesh.position.x = gx;
-          gableMesh.castShadow = true;
-          gableMesh.receiveShadow = true;
-          scene.add(gableMesh);
-        });
+            const gableGeo = new THREE.ShapeGeometry(gableShape);
+            const gableMesh = new THREE.Mesh(gableGeo, gableMat);
+            gableMesh.rotation.y = Math.PI / 2;
+            gableMesh.position.x = gx;
+            gableMesh.castShadow = true;
+            gableMesh.receiveShadow = true;
+            scene.add(gableMesh);
+          });
+        }
       }
 
       // ---------------------------------------------------------

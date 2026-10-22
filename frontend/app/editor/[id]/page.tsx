@@ -93,11 +93,11 @@ export default function EditorPage() {
             };
           }
           setGeometry(geom);
-          if (geom.tilt_deg) {
+          if (geom.tilt_deg !== undefined && geom.tilt_deg !== null) {
             setTiltDeg(geom.tilt_deg);
           }
           if (
-            geom.estimated_pitch_deg ||
+            geom.estimated_pitch_deg !== undefined ||
             geom.pitch_reasoning ||
             geom.roof_material
           ) {

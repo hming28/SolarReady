@@ -467,7 +467,7 @@ export default function LayoutSimPage() {
           <div className="hidden md:flex items-center gap-2">
             <span className="text-slate-400">Roof Angle:</span>
             <span className="font-semibold text-amber-300 bg-amber-950/60 border border-amber-800/80 px-2 py-0.5 rounded-full text-[11px]">
-              {assessment?.geometry?.tilt_deg || 15}° Pitch
+              {assessment?.geometry?.tilt_deg !== undefined ? assessment.geometry.tilt_deg : 15}° Pitch
             </span>
           </div>
 

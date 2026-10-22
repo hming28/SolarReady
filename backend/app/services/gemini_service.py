@@ -93,7 +93,7 @@ class GeminiVisionService:
                             "roof_type": "complex",
                             "ridge_orientation": "cross",
                             "roof_material": other_a.geometry.roof_material or "Concrete tile",
-                            "estimated_pitch_deg": other_a.geometry.tilt_deg or 22.0,
+                            "estimated_pitch_deg": other_a.geometry.tilt_deg if other_a.geometry.tilt_deg is not None else 22.0,
                             "pitch_confidence_range": [18.0, 26.0],
                             "pitch_reasoning": "High-fidelity topological facet model loaded from benchmark verified prior.",
                             "polygons_px": other_a.geometry.roof_polygons_px,

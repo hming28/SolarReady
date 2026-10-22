@@ -624,7 +624,7 @@ export default function ReportPage() {
               <div>
                 <span className="text-slate-400 block text-[11px]">Roof Pitch / Tilt:</span>
                 <span className="font-bold text-amber-600">
-                  {assessment.geometry?.tilt_deg || 15}° Slope
+                  {assessment.geometry?.tilt_deg !== undefined ? assessment.geometry.tilt_deg : 15}° Slope
                 </span>
               </div>
               <div>
