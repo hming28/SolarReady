@@ -18,7 +18,7 @@
     "height_px": 261,
     "sha256": "03c48dcb159a97550e099e95f85cfdbbbabc907206e4d2dda13dd612b245be8a"
   },
-  "is_demo": true,
+  "is_demo": false,
   "consent": {
     "image_use": true,
     "timestamp": "2026-10-21T02:11:38.980Z"

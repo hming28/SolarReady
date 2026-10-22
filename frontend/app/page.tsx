@@ -60,10 +60,10 @@ const DEFAULT_BENCHMARKS: SavedProject[] = [
     capacityKwp: 5.5,
     panelCount: 10,
     costRm: 19250,
-    annualSavingsRm: 3450,
-    paybackYears: 5.6,
-    updatedAt: "Verified Benchmark",
-    isBenchmark: true,
+    annualSavingsRm: 2854.28,
+    paybackYears: 6.7,
+    updatedAt: "Saved Assessment",
+    isBenchmark: false,
   },
 ];
 
@@ -478,7 +478,7 @@ export default function UploadPage() {
                   >
                     {proj.isBenchmark ? "Benchmark" : "Saved Project"}
                   </span>
-                  {!proj.isBenchmark && (
+                  {!proj.isBenchmark && proj.id !== "sample_setia_indah" && (
                     <button
                       type="button"
                       onClick={(e) => handleDeleteSavedProject(proj.id, e)}
