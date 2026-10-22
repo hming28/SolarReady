@@ -1019,6 +1019,7 @@ export default function LayoutSimPage() {
                 geometry={assessment.geometry}
                 layout={layout}
                 imageUrl={imageUrl}
+                onSwitchTo2D={() => setViewMode("realistic")}
               />
             ) : (
               <PanelOverlay
