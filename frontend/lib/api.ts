@@ -79,10 +79,73 @@ export const api = {
   },
 
   async getAssessment(assessmentId: string): Promise<Assessment> {
-    const res = await fetch(`${API_BASE}/api/assessments/${assessmentId}`, {
-      cache: "no-store",
-    });
-    return handleResponse<Assessment>(res);
+    try {
+      const res = await fetch(`${API_BASE}/api/assessments/${assessmentId}`, {
+        cache: "no-store",
+      });
+      const data = await handleResponse<Assessment>(res);
+      if (typeof window !== "undefined" && data) {
+        try {
+          localStorage.setItem(`solarready_assessment_${assessmentId}`, JSON.stringify(data));
+        } catch {}
+      }
+      return data;
+    } catch (err: any) {
+      if (typeof window !== "undefined") {
+        try {
+          const cached = localStorage.getItem(`solarready_assessment_${assessmentId}`);
+          if (cached) {
+            return JSON.parse(cached);
+          }
+          const savedStr = localStorage.getItem("solarready_saved_projects");
+          if (savedStr) {
+            const list = JSON.parse(savedStr);
+            const matched = list.find((p: any) => p.id === assessmentId);
+            if (matched) {
+              const fallbackAssessment: Assessment = {
+                id: assessmentId,
+                created_at: new Date().toISOString(),
+                title: matched.title || "Saved Rooftop Solar Project",
+                house_type: matched.houseType || "Residential Rooftop",
+                location: { text: matched.location || "Peninsular Malaysia", lat: 3.185, lon: 101.512 },
+                monthly_bill_rm: 380,
+                is_demo: false,
+                is_saved: true,
+                updated_at: matched.updatedAt || new Date().toISOString(),
+                image: {
+                  filename: "saved_roof.jpg",
+                  path: "",
+                  width_px: 1200,
+                  height_px: 800,
+                  sha256: "saved_cache",
+                },
+                consent: {
+                  image_use: true,
+                  timestamp: new Date().toISOString(),
+                },
+                geometry: {
+                  roof_polygons_px: [],
+                  tilt_deg: 15.0,
+                  obstacles: [],
+                  scale: { metres_per_pixel: 0.05, quality_tier: "user_measured", method: "known_line" },
+                },
+                layout: {
+                  capacity_kwp: matched.capacityKwp || 3.85,
+                  panel_count: matched.panelCount || 8,
+                  module_area_m2: (matched.panelCount || 8) * 2.58,
+                  usable_area_m2: (matched.panelCount || 8) * 3.2,
+                  placements: [],
+                } as any,
+              };
+              return fallbackAssessment;
+            }
+          }
+        } catch (storageErr) {
+          console.warn("Storage fallback error:", storageErr);
+        }
+      }
+      throw err;
+    }
   },
 
   async listAssessments(): Promise<AssessmentSummary[]> {

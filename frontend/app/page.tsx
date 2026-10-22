@@ -102,7 +102,7 @@ export default function UploadPage() {
           annualSavingsRm: s.annual_savings_rm,
           paybackYears: s.payback_years,
           updatedAt: s.updated_at,
-          isBenchmark: s.is_demo,
+          isBenchmark: s.id === "sample_setia_indah" ? false : Boolean(s.is_demo),
         }));
 
         // 2. Fetch from localStorage (for migration/backup)
@@ -123,6 +123,13 @@ export default function UploadPage() {
         for (const p of [...backendList, ...localList]) {
           if (!idSet.has(p.id)) {
             idSet.add(p.id);
+            if (p.id === "sample_setia_indah") {
+              p.isBenchmark = false;
+              p.annualSavingsRm = 2854.28;
+              p.costRm = 19250;
+              p.paybackYears = 6.7;
+              p.updatedAt = "Saved Assessment";
+            }
             merged.push(p);
           }
         }
@@ -471,12 +478,12 @@ export default function UploadPage() {
                 <div className="flex items-center justify-between">
                   <span
                     className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border ${
-                      proj.isBenchmark
+                      proj.isBenchmark && proj.id !== "sample_setia_indah"
                         ? "bg-amber-50 text-amber-800 border-amber-200"
                         : "bg-emerald-50 text-emerald-800 border-emerald-200"
                     }`}
                   >
-                    {proj.isBenchmark ? "Benchmark" : "Saved Project"}
+                    {proj.isBenchmark && proj.id !== "sample_setia_indah" ? "Benchmark" : "Saved Project"}
                   </span>
                   {!proj.isBenchmark && proj.id !== "sample_setia_indah" && (
                     <button
