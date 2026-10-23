@@ -210,7 +210,7 @@ function createPVCellTexture(): THREE.CanvasTexture {
       // bottom-left
       ctx.beginPath(); ctx.moveTo(x, y + cellH); ctx.lineTo(x + cut, y + cellH); ctx.lineTo(x, y + cellH - cut); ctx.fill();
       // bottom-right
-      ctx.beginPath(); ctx.moveTo(x + cellW, y + cellH); ctx.lineTo(x + cellW - cut, y + cellH); ctx.lineTo(x + cellW, y - cut); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x + cellW, y + cellH); ctx.lineTo(x + cellW - cut, y + cellH); ctx.lineTo(x + cellW, y + cellH - cut); ctx.fill();
 
       // Silver Busbar Lines (3 main vertical conductors per cell)
       ctx.strokeStyle = "rgba(203, 213, 225, 0.45)";
@@ -1442,6 +1442,75 @@ export default function Roof3DViewer({
         scene.add(edgeLines);
       });
 
+      // ---------------------------------------------------------
+      // C2. Complete roof shell over the whole footprint
+      // The Step 2 polygons only describe the areas that were drawn. Without a
+      // full shell the rest of the house shows the bare wall top and the ridge
+      // cap floats in the air. The shell uses exactly the same plane (ridge,
+      // tilt, eave) as the facets and the panels, so everything stays coplanar;
+      // the annotated facets are drawn on top with their coloured outlines.
+      // ---------------------------------------------------------
+      const ridgeAxisPos = isRidgeAlongZ ? ridgeSceneX : ridgeSceneZ;
+      const roofYAt = (a: number) =>
+        Math.max(
+          eaveHeight,
+          Math.min(ridgeHeight - Math.abs(a - ridgeAxisPos) * Math.tan(tiltRad), ridgeHeight)
+        );
+
+      if (tiltDeg > 1.0) {
+        const halfAcross = (isRidgeAlongZ ? footprintW : footprintD) * 0.5;
+        const halfAlong = (isRidgeAlongZ ? footprintD : footprintW) * 0.5;
+        const shellLift = -0.012; // sits just under the annotated facets (no z-fighting)
+
+        const addSlope = (aEdge: number) => {
+          const yRidge = ridgeHeight + shellLift;
+          const yEdge = roofYAt(aEdge) + shellLift;
+          const c: [number, number, number][] = isRidgeAlongZ
+            ? [
+                [ridgeSceneX, yRidge, -halfAlong],
+                [ridgeSceneX, yRidge, halfAlong],
+                [aEdge, yEdge, halfAlong],
+                [aEdge, yEdge, -halfAlong],
+              ]
+            : [
+                [-halfAlong, yRidge, ridgeSceneZ],
+                [halfAlong, yRidge, ridgeSceneZ],
+                [halfAlong, yEdge, aEdge],
+                [-halfAlong, yEdge, aEdge],
+              ];
+          const positions: number[] = [];
+          const uvs: number[] = [];
+          [0, 1, 2, 0, 2, 3].forEach((i) => {
+            positions.push(c[i][0], c[i][1], c[i][2]);
+            uvs.push((c[i][0] + 20) / 10.0, (c[i][2] + 20) / 10.0); // same mapping as the facets
+          });
+          const g = new THREE.BufferGeometry();
+          g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+          g.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+          g.computeVertexNormals();
+          const slope = new THREE.Mesh(g, roofMat); // DoubleSide material: winding does not matter
+          slope.castShadow = true;
+          slope.receiveShadow = true;
+          scene.add(slope);
+        };
+        addSlope(-halfAcross);
+        addSlope(halfAcross);
+
+        // If the ridge is not centred, the shorter slope meets the wall above eave level:
+        // close that gap with a strip of wall so there is no see-through slot under the roof.
+        const fillMat = new THREE.MeshStandardMaterial({ color: preset.upperWall, roughness: 0.85 });
+        [-1, 1].forEach((sgn) => {
+          const aWall = sgn * (isRidgeAlongZ ? footprintW : footprintD) * 0.48;
+          const h = roofYAt(aWall) - eaveHeight;
+          if (h > 0.02) {
+            const len = (isRidgeAlongZ ? footprintD : footprintW) * 0.96 + 0.1;
+            const fill = isRidgeAlongZ ? rbox(0.12, h, len, fillMat, 0.02) : rbox(len, h, 0.12, fillMat, 0.02);
+            fill.position.set(isRidgeAlongZ ? aWall : 0, eaveHeight + h / 2, isRidgeAlongZ ? 0 : aWall);
+            scene.add(fill);
+          }
+        });
+      }
+
       // Triangular Gable End Walls & Ridge Cap (Only rendered when pitch > 1° to properly support 0° Flat Roofs)
       if (tiltDeg > 1.0) {
         const gableMat = new THREE.MeshStandardMaterial({
@@ -1476,8 +1545,8 @@ export default function Roof3DViewer({
           cap.position.set(ridgeSceneX, ridgeHeight + 0.02, 0);
           scene.add(cap);
           [-footprintD * 0.49, footprintD * 0.49].forEach((gz) => {
-            addBarge(scene, -footprintW * 0.48, eaveHeight, ridgeSceneX, ridgeHeight, gz);
-            addBarge(scene, ridgeSceneX, ridgeHeight, footprintW * 0.48, eaveHeight, gz);
+            addBarge(scene, -footprintW * 0.48, roofYAt(-footprintW * 0.48), ridgeSceneX, ridgeHeight, gz);
+            addBarge(scene, ridgeSceneX, ridgeHeight, footprintW * 0.48, roofYAt(footprintW * 0.48), gz);
           });
         } else {
           const cap = rbox(footprintW, 0.17, 0.3, capMat, 0.06);
@@ -1487,8 +1556,8 @@ export default function Roof3DViewer({
             const bg = new THREE.Group();
             bg.rotation.y = Math.PI / 2;
             bg.position.x = gx;
-            addBarge(bg, -footprintD * 0.48, eaveHeight, ridgeSceneZ, ridgeHeight, 0);
-            addBarge(bg, ridgeSceneZ, ridgeHeight, footprintD * 0.48, eaveHeight, 0);
+            addBarge(bg, footprintD * 0.48, roofYAt(-footprintD * 0.48), -ridgeSceneZ, ridgeHeight, 0);
+            addBarge(bg, -ridgeSceneZ, ridgeHeight, -footprintD * 0.48, roofYAt(footprintD * 0.48), 0);
             scene.add(bg);
           });
         }
@@ -1497,7 +1566,9 @@ export default function Roof3DViewer({
           [-footprintD * 0.478, footprintD * 0.478].forEach((gz) => {
             const gableShape = new THREE.Shape();
             gableShape.moveTo(-footprintW * 0.48, eaveHeight);
+            gableShape.lineTo(-footprintW * 0.48, roofYAt(-footprintW * 0.48));
             gableShape.lineTo(ridgeSceneX, ridgeHeight);
+            gableShape.lineTo(footprintW * 0.48, roofYAt(footprintW * 0.48));
             gableShape.lineTo(footprintW * 0.48, eaveHeight);
             gableShape.closePath();
 
@@ -1511,9 +1582,12 @@ export default function Roof3DViewer({
         } else {
           [-footprintW * 0.478, footprintW * 0.478].forEach((gx) => {
             const gableShape = new THREE.Shape();
-            gableShape.moveTo(-footprintD * 0.48, eaveHeight);
-            gableShape.lineTo(ridgeSceneZ, ridgeHeight);
-            gableShape.lineTo(footprintD * 0.48, eaveHeight);
+            // mesh is rotated +90deg about Y, so local x = -world z
+            gableShape.moveTo(footprintD * 0.48, eaveHeight);
+            gableShape.lineTo(footprintD * 0.48, roofYAt(-footprintD * 0.48));
+            gableShape.lineTo(-ridgeSceneZ, ridgeHeight);
+            gableShape.lineTo(-footprintD * 0.48, roofYAt(footprintD * 0.48));
+            gableShape.lineTo(-footprintD * 0.48, eaveHeight);
             gableShape.closePath();
 
             const gableGeo = new THREE.ShapeGeometry(gableShape);
