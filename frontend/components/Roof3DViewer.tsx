@@ -29,8 +29,6 @@ interface Roof3DViewerProps {
   geometry: RoofGeometry;
   layout: LayoutResponse;
   imageUrl?: string;
-  imageWidth?: number;
-  imageHeight?: number;
   onSwitchTo2D?: () => void;
 }
 
@@ -956,8 +954,6 @@ export default function Roof3DViewer({
   geometry,
   layout,
   imageUrl,
-  imageWidth,
-  imageHeight,
   onSwitchTo2D,
 }: Roof3DViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -974,17 +970,7 @@ export default function Roof3DViewer({
   const [timeOfDay, setTimeOfDay] = useState<number>(11.5);
   const [autoRotate, setAutoRotate] = useState<boolean>(false);
   const [scenePreset, setScenePreset] = useState<ScenePresetKey>("warm");
-  const [activeRoofStyle, setActiveRoofStyle] = useState<"aerial" | "charcoal" | "terracotta">(
-    imageUrl ? "aerial" : "terracotta"
-  );
-  const [ridgeOrientationOverride, setRidgeOrientationOverride] = useState<"auto" | "ew" | "ns">("auto");
-
-  // Default to aerial photograph whenever imageUrl is present
-  useEffect(() => {
-    if (imageUrl) {
-      setActiveRoofStyle("aerial");
-    }
-  }, [imageUrl]);
+  const [activeRoofStyle, setActiveRoofStyle] = useState<"charcoal" | "terracotta">("terracotta");
   const preset = SCENE_PRESETS[scenePreset];
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playSpeed, setPlaySpeed] = useState<number>(1);
@@ -1207,16 +1193,6 @@ export default function Roof3DViewer({
         allPtsM.push([pt[0] * mPerPx, pt[1] * mPerPx]);
       });
     });
-    // Include obstacles in building boundary estimation
-    (geometry.obstacles || []).forEach((obs) => {
-      obs.polygon_px?.forEach((pt) => {
-        allPtsM.push([pt[0] * mPerPx, pt[1] * mPerPx]);
-      });
-    });
-    // Include reference scale line points if present
-    (geometry.scale?.reference_px || []).forEach((pt) => {
-      allPtsM.push([pt[0] * mPerPx, pt[1] * mPerPx]);
-    });
 
     if (allPtsM.length >= 3) {
       const xs = allPtsM.map((p) => p[0]);
@@ -1228,16 +1204,8 @@ export default function Roof3DViewer({
       const centerX = (minX + maxX) / 2.0;
       const centerZ = (minZ + maxZ) / 2.0;
 
-      // Realistic Malaysian residential terrace / linked house proportions
-      // Typical minimum building lot envelope: width >= 7.5m (24ft lot), depth >= 11.0m (36ft)
-      const footprintW = Math.max(maxX - minX, 7.5);
-      const footprintD = Math.max(maxZ - minZ, 11.0);
-
-      // Source image extent in meters for top-down aerial UV projection
-      const imgWPx = imageWidth || (geometry.scale?.reference_m ? 870 : 800);
-      const imgHPx = imageHeight || (geometry.scale?.reference_m ? 930 : 800);
-      const imgWM = imgWPx * mPerPx;
-      const imgHM = imgHPx * mPerPx;
+      const footprintW = Math.max(maxX - minX, 6.0);
+      const footprintD = Math.max(maxZ - minZ, 6.0);
 
       // Heights in meters for typical Malaysian 2-storey terrace house (e.g. Elmina West)
       const eaveHeight = 5.8;
@@ -1251,70 +1219,20 @@ export default function Roof3DViewer({
       buildHouse(scene, { footprintW, footprintD, eaveHeight, groundFloorH, preset });
 
       // ---------------------------------------------------------
-      // C. Roof Materials & Textures (Aerial Photo or Procedural Architectural Tiles)
+      // C. Pitched Roof Facet Meshes with Interlocking Concrete Tiles
       // ---------------------------------------------------------
-      let aerialTexture: THREE.Texture | null = null;
-      if (imageUrl) {
-        aerialTexture = new THREE.TextureLoader().load(
-          imageUrl,
-          (tex) => {
-            tex.colorSpace = THREE.SRGBColorSpace;
-            tex.wrapS = THREE.ClampToEdgeWrapping;
-            tex.wrapT = THREE.ClampToEdgeWrapping;
-            tex.minFilter = THREE.LinearMipmapLinearFilter;
-            tex.magFilter = THREE.LinearFilter;
-            tex.generateMipmaps = true;
-            tex.needsUpdate = true;
-            if (activeRoofStyle === "aerial" && roofMat) {
-              roofMat.map = tex;
-              roofMat.needsUpdate = true;
-            }
-          },
-          undefined,
-          (err) => {
-            console.warn("Failed to load aerial roof texture:", err);
-          }
-        );
-        aerialTexture.colorSpace = THREE.SRGBColorSpace;
-        aerialTexture.wrapS = THREE.ClampToEdgeWrapping;
-        aerialTexture.wrapT = THREE.ClampToEdgeWrapping;
-      }
-
       const tileTexture = createRoofTileTexture();
       tileTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-
-      const roofMat = activeRoofStyle === "aerial" && aerialTexture
-        ? new THREE.MeshStandardMaterial({
-            map: aerialTexture,
-            roughness: 0.72,
-            metalness: 0.05,
-            side: THREE.DoubleSide,
-          })
-        : new THREE.MeshStandardMaterial({
-            color: activeRoofStyle === "charcoal" ? preset.roofTints.charcoal : preset.roofTints.terracotta,
-            map: tileTexture,
-            roughness: 0.62,
-            metalness: 0.12,
-            side: THREE.DoubleSide,
-          });
+      const roofMat = new THREE.MeshStandardMaterial({
+        color: activeRoofStyle === "charcoal" ? preset.roofTints.charcoal : preset.roofTints.terracotta,
+        map: tileTexture,
+        roughness: 0.62,
+        metalness: 0.12,
+        side: THREE.DoubleSide,
+      });
 
       // Eaves gutters / fascia in the preset trim colour
       const gutterMat = new THREE.MeshStandardMaterial({ color: preset.trim, metalness: 0.1, roughness: 0.5 });
-
-      // UV mapping helper function: maps 3D roof scene coordinates (x, z) to texture UVs
-      const computeUV = (x: number, z: number): [number, number] => {
-        if (activeRoofStyle === "aerial") {
-          // World coordinate in meters relative to top-left of image
-          const vx = x + centerX;
-          const vz = z + centerZ;
-          const u = Math.max(0.0, Math.min(1.0, vx / imgWM));
-          const v = Math.max(0.0, Math.min(1.0, 1.0 - (vz / imgHM)));
-          return [u, v];
-        } else {
-          // Repeating tile pattern UVs
-          return [(x + 50) / 3.2, (z + 50) / 3.2];
-        }
-      };
 
       // Distinct Multi-Color Palette Synchronized with Step 2 Editor
       const FACET_PALETTE_HEX = [
@@ -1327,140 +1245,65 @@ export default function Roof3DViewer({
         0x4f46e5, // Plane 7: Indigo
       ];
 
-      // Detect roof orientation:
-      // Priority 1: User manual toggle override if set
-      let isRidgeAlongZ = false;
-      if (ridgeOrientationOverride === "ns") {
-        isRidgeAlongZ = true;
-      } else if (ridgeOrientationOverride === "ew") {
-        isRidgeAlongZ = false;
-      } else {
-        // Priority 2: Check backend layout facet slopes and geometry faces metrics
-        const allSlopeDirs = [
-          ...(layout.facet_layouts || []).map((f) => f.slope_direction),
-          ...(geometry.faces_metrics || []).map((f) => f.slope_direction),
-        ]
-          .filter(Boolean)
-          .map((d) => String(d).toLowerCase());
+      // Detect roof orientation: whether ridge runs along X (sloping North/South) or along Z (sloping East/West)
+      const facetCentroidsX = rawPolys.map((poly) =>
+        poly.reduce((sum, pt) => sum + pt[0] * mPerPx, 0) / (poly.length || 1)
+      );
+      const facetCentroidsZ = rawPolys.map((poly) =>
+        poly.reduce((sum, pt) => sum + pt[1] * mPerPx, 0) / (poly.length || 1)
+      );
 
-        const hasEW = allSlopeDirs.some((d) => d.includes("east") || d.includes("west"));
-        const hasNS = allSlopeDirs.some((d) => d.includes("north") || d.includes("south"));
+      const spanCentroidsX = rawPolys.length >= 2
+        ? Math.max(...facetCentroidsX) - Math.min(...facetCentroidsX)
+        : 0;
+      const spanCentroidsZ = rawPolys.length >= 2
+        ? Math.max(...facetCentroidsZ) - Math.min(...facetCentroidsZ)
+        : 0;
 
-        if (hasEW && !hasNS) {
-          isRidgeAlongZ = true; // Slopes to East and West -> Ridge is North-South (along Z)
-        } else if (hasNS && !hasEW) {
-          isRidgeAlongZ = false; // Slopes to North and South -> Ridge is East-West (along X)
-        } else {
-          // Standard residential terrace / linked house default:
-          // Front of the house (+Z) faces street/car porch, rear faces back lane (-Z).
-          // Ridge runs East-West (along X) parallel to the street!
-          isRidgeAlongZ = false;
-        }
-      }
+      // When the facets are separated more along X than Z, the ridge runs along Z (North-South) and roof slopes East-West
+      const isRidgeAlongZ = spanCentroidsX > spanCentroidsZ * 1.15;
 
-      // ---------------------------------------------------------
-      // True Proportional Ridge Position & Asymmetrical Slopes:
-      // Real roofs are rarely in the exact dead center (50/50).
-      // We detect the true boundary between the slopes from the polygons,
-      // and adapt the ridge position, slopes, gable walls, and panels proportionally.
-      // ---------------------------------------------------------
-      const polyBounds = rawPolys.map((poly) => {
-        const pxs = poly.map((pt) => pt[0] * mPerPx);
-        const pzs = poly.map((pt) => pt[1] * mPerPx);
-        return {
-          minX: Math.min(...pxs),
-          maxX: Math.max(...pxs),
-          minZ: Math.min(...pzs),
-          maxZ: Math.max(...pzs),
-          cenX: pxs.reduce((a, b) => a + b, 0) / (pxs.length || 1),
-          cenZ: pzs.reduce((a, b) => a + b, 0) / (pzs.length || 1),
-        };
-      });
-
+      // Calculate realistic Gable Roof Ridge Height and True Ridge Position
       let trueRidgeZ = centerZ;
       let trueRidgeX = centerX;
 
       if (isRidgeAlongZ) {
-        // Ridge along Z: find dividing line along X between Left and Right slopes
-        if (polyBounds.length >= 2) {
-          const sortedByX = [...polyBounds].sort((a, b) => a.cenX - b.cenX);
-          const gap = sortedByX[sortedByX.length - 1].cenX - sortedByX[0].cenX;
-          if (gap > footprintW * 0.25) {
-            let bestGapIdx = 1;
-            let maxGap = -Infinity;
-            for (let i = 1; i < sortedByX.length; i++) {
-              const g = sortedByX[i].cenX - sortedByX[i - 1].cenX;
-              if (g > maxGap) {
-                maxGap = g;
-                bestGapIdx = i;
-              }
-            }
-            const leftXs = sortedByX.slice(0, bestGapIdx).map((p) => p.maxX);
-            const rightXs = sortedByX.slice(bestGapIdx).map((p) => p.minX);
-            const maxLeftX = Math.max(...leftXs);
-            const minRightX = Math.min(...rightXs);
-            trueRidgeX = (maxLeftX + minRightX) / 2.0;
+        if (rawPolys.length >= 2) {
+          let minCIdx = 0;
+          let maxCIdx = 0;
+          for (let i = 1; i < facetCentroidsX.length; i++) {
+            if (facetCentroidsX[i] < facetCentroidsX[minCIdx]) minCIdx = i;
+            if (facetCentroidsX[i] > facetCentroidsX[maxCIdx]) maxCIdx = i;
+          }
+          if (minCIdx !== maxCIdx) {
+            const leftXs = rawPolys[minCIdx].map((pt) => pt[0] * mPerPx);
+            const rightXs = rawPolys[maxCIdx].map((pt) => pt[0] * mPerPx);
+            trueRidgeX = (Math.max(...leftXs) + Math.min(...rightXs)) / 2.0;
           }
         }
-        const minAllowedX = minX + footprintW * 0.2;
-        const maxAllowedX = minX + footprintW * 0.8;
-        trueRidgeX = Math.max(minAllowedX, Math.min(trueRidgeX, maxAllowedX));
       } else {
-        // Ridge along X: find dividing line along Z between Rear (-Z) and Front (+Z) slopes
-        if (polyBounds.length >= 2) {
-          const sortedByZ = [...polyBounds].sort((a, b) => a.cenZ - b.cenZ);
-          const gap = sortedByZ[sortedByZ.length - 1].cenZ - sortedByZ[0].cenZ;
-          if (gap > footprintD * 0.25) {
-            let bestGapIdx = 1;
-            let maxGap = -Infinity;
-            for (let i = 1; i < sortedByZ.length; i++) {
-              const g = sortedByZ[i].cenZ - sortedByZ[i - 1].cenZ;
-              if (g > maxGap) {
-                maxGap = g;
-                bestGapIdx = i;
-              }
-            }
-            const rearZs = sortedByZ.slice(0, bestGapIdx).map((p) => p.maxZ);
-            const frontZs = sortedByZ.slice(bestGapIdx).map((p) => p.minZ);
-            const maxRearZ = Math.max(...rearZs);
-            const minFrontZ = Math.min(...frontZs);
-            trueRidgeZ = (maxRearZ + minFrontZ) / 2.0;
+        if (rawPolys.length >= 2) {
+          let minCIdx = 0;
+          let maxCIdx = 0;
+          for (let i = 1; i < facetCentroidsZ.length; i++) {
+            if (facetCentroidsZ[i] < facetCentroidsZ[minCIdx]) minCIdx = i;
+            if (facetCentroidsZ[i] > facetCentroidsZ[maxCIdx]) maxCIdx = i;
+          }
+          if (minCIdx !== maxCIdx) {
+            const rearZs = rawPolys[minCIdx].map((pt) => pt[1] * mPerPx);
+            const frontZs = rawPolys[maxCIdx].map((pt) => pt[1] * mPerPx);
+            trueRidgeZ = (Math.max(...rearZs) + Math.min(...frontZs)) / 2.0;
           }
         }
-        const minAllowedZ = minZ + footprintD * 0.2;
-        const maxAllowedZ = minZ + footprintD * 0.8;
-        trueRidgeZ = Math.max(minAllowedZ, Math.min(trueRidgeZ, maxAllowedZ));
       }
 
       const ridgeSceneX = trueRidgeX - centerX;
       const ridgeSceneZ = trueRidgeZ - centerZ;
 
-      // Proportional slope spans
-      const rearSpan = Math.max(0.5, ridgeSceneZ - (-footprintD / 2.0));
-      const frontSpan = Math.max(0.5, footprintD / 2.0 - ridgeSceneZ);
-      const leftSpan = Math.max(0.5, ridgeSceneX - (-footprintW / 2.0));
-      const rightSpan = Math.max(0.5, footprintW / 2.0 - ridgeSceneX);
-
-      const dominantSpan = isRidgeAlongZ
-        ? Math.max(leftSpan, rightSpan)
-        : Math.max(frontSpan, rearSpan);
-
-      const ridgeHeight = eaveHeight + dominantSpan * Math.tan(tiltRad);
-
-      // Independent pitch for each slope ensuring both eaves land EXACTLY at eaveHeight = 5.8m
-      const frontTiltRad = Math.atan((ridgeHeight - eaveHeight) / frontSpan);
-      const rearTiltRad = Math.atan((ridgeHeight - eaveHeight) / rearSpan);
-      const leftTiltRad = Math.atan((ridgeHeight - eaveHeight) / leftSpan);
-      const rightTiltRad = Math.atan((ridgeHeight - eaveHeight) / rightSpan);
-
-      const overEave = 0.22;   // Overhang extending over gutters
-      const overGable = 0.18;  // Overhang extending past gable walls
-
-      // Attic Ceiling Slab at eaveHeight - completely encloses interior of the house
-      const slabMat = new THREE.MeshStandardMaterial({ color: preset.porchRoof, roughness: 0.6, metalness: 0.05 });
-      const ceilingSlab = rbox(footprintW, 0.12, footprintD, slabMat, 0.02);
-      ceilingSlab.position.set(0, eaveHeight - 0.06, 0);
-      scene.add(ceilingSlab);
+      const slopeDepth = Math.max(trueRidgeZ - minZ, maxZ - trueRidgeZ, footprintD / 2.0);
+      const slopeWidth = Math.max(trueRidgeX - minX, maxX - trueRidgeX, footprintW / 2.0);
+      const slopeSpan = isRidgeAlongZ ? slopeWidth : slopeDepth;
+      const ridgeHeight = eaveHeight + slopeSpan * Math.tan(tiltRad);
 
       // Rain Gutters adapted to roof orientation
       if (isRidgeAlongZ) {
@@ -1477,110 +1320,6 @@ export default function Roof3DViewer({
         const gutterBack = new THREE.Mesh(new THREE.BoxGeometry(footprintW * 1.02, 0.14, 0.14), gutterMat);
         gutterBack.position.set(0, eaveHeight, -footprintD * 0.51);
         scene.add(gutterBack);
-      }
-
-      // ---------------------------------------------------------
-      // B. Watertight Structural Base Roof (Solid Envelope)
-      // True proportional asymmetrical gable slopes
-      // ---------------------------------------------------------
-      if (tiltDeg > 1.0) {
-        const baseRoofGeom = new THREE.BufferGeometry();
-        const basePositions: number[] = [];
-        const baseNormals: number[] = [];
-        const baseUvs: number[] = [];
-
-        if (!isRidgeAlongZ) {
-          // Ridge runs along X at Z = ridgeSceneZ, Y = ridgeHeight
-          // Slopes fall to Front (+Z) and Rear (-Z)
-          const x0 = -footprintW / 2 - overGable;
-          const x1 = footprintW / 2 + overGable;
-          const zFront = footprintD / 2 + overEave;
-          const zRear = -footprintD / 2 - overEave;
-          const yEaveFront = eaveHeight - overEave * Math.tan(frontTiltRad);
-          const yEaveRear = eaveHeight - overEave * Math.tan(rearTiltRad);
-
-          const fn = new THREE.Vector3(0, Math.cos(frontTiltRad), Math.sin(frontTiltRad)).normalize();
-          const rn = new THREE.Vector3(0, Math.cos(rearTiltRad), -Math.sin(rearTiltRad)).normalize();
-
-          // Front Slope (from Z = ridgeSceneZ down to zFront)
-          const pF0 = [x0, ridgeHeight, ridgeSceneZ];
-          const pF1 = [x1, ridgeHeight, ridgeSceneZ];
-          const pF2 = [x1, yEaveFront, zFront];
-          const pF3 = [x0, yEaveFront, zFront];
-
-          [pF0, pF3, pF1, pF1, pF3, pF2].forEach((p) => {
-            basePositions.push(p[0], p[1], p[2]);
-            baseNormals.push(fn.x, fn.y, fn.z);
-            const [u, v] = computeUV(p[0], p[2]);
-            baseUvs.push(u, v);
-          });
-
-          // Rear Slope (from Z = ridgeSceneZ down to zRear)
-          const pR0 = [x0, ridgeHeight, ridgeSceneZ];
-          const pR1 = [x1, ridgeHeight, ridgeSceneZ];
-          const pR2 = [x1, yEaveRear, zRear];
-          const pR3 = [x0, yEaveRear, zRear];
-
-          [pR0, pR1, pR3, pR1, pR2, pR3].forEach((p) => {
-            basePositions.push(p[0], p[1], p[2]);
-            baseNormals.push(rn.x, rn.y, rn.z);
-            const [u, v] = computeUV(p[0], p[2]);
-            baseUvs.push(u, v);
-          });
-        } else {
-          // Ridge runs along Z at X = ridgeSceneX, Y = ridgeHeight
-          // Slopes fall to Left (-X) and Right (+X)
-          const z0 = -footprintD / 2 - overGable;
-          const z1 = footprintD / 2 + overGable;
-          const xRight = footprintW / 2 + overEave;
-          const xLeft = -footprintW / 2 - overEave;
-          const yEaveRight = eaveHeight - overEave * Math.tan(rightTiltRad);
-          const yEaveLeft = eaveHeight - overEave * Math.tan(leftTiltRad);
-
-          const ln = new THREE.Vector3(-Math.sin(leftTiltRad), Math.cos(leftTiltRad), 0).normalize();
-          const rn = new THREE.Vector3(Math.sin(rightTiltRad), Math.cos(rightTiltRad), 0).normalize();
-
-          // Left Slope (from X = ridgeSceneX down to xLeft)
-          const pL0 = [ridgeSceneX, ridgeHeight, z0];
-          const pL1 = [ridgeSceneX, ridgeHeight, z1];
-          const pL2 = [xLeft, yEaveLeft, z1];
-          const pL3 = [xLeft, yEaveLeft, z0];
-
-          [pL0, pL2, pL1, pL0, pL3, pL2].forEach((p) => {
-            basePositions.push(p[0], p[1], p[2]);
-            baseNormals.push(ln.x, ln.y, ln.z);
-            const [u, v] = computeUV(p[0], p[2]);
-            baseUvs.push(u, v);
-          });
-
-          // Right Slope (from X = ridgeSceneX down to xRight)
-          const pR0 = [ridgeSceneX, ridgeHeight, z0];
-          const pR1 = [ridgeSceneX, ridgeHeight, z1];
-          const pR2 = [xRight, yEaveRight, z1];
-          const pR3 = [xRight, yEaveRight, z0];
-
-          [pR0, pR1, pR2, pR0, pR2, pR3].forEach((p) => {
-            basePositions.push(p[0], p[1], p[2]);
-            baseNormals.push(rn.x, rn.y, rn.z);
-            const [u, v] = computeUV(p[0], p[2]);
-            baseUvs.push(u, v);
-          });
-        }
-
-        baseRoofGeom.setAttribute("position", new THREE.Float32BufferAttribute(basePositions, 3));
-        baseRoofGeom.setAttribute("normal", new THREE.Float32BufferAttribute(baseNormals, 3));
-        baseRoofGeom.setAttribute("uv", new THREE.Float32BufferAttribute(baseUvs, 2));
-
-        const baseRoofMesh = new THREE.Mesh(baseRoofGeom, roofMat);
-        baseRoofMesh.castShadow = true;
-        baseRoofMesh.receiveShadow = true;
-        scene.add(baseRoofMesh);
-      } else {
-        // Flat Roof: clean parapet horizontal slab
-        const flatRoof = rbox(footprintW + 0.2, 0.16, footprintD + 0.2, roofMat, 0.04);
-        flatRoof.position.set(0, eaveHeight + 0.08, 0);
-        flatRoof.receiveShadow = true;
-        scene.add(flatRoof);
       }
 
       // Helper function to split a polygon across a straight cut line (Sutherland-Hodgman style)
@@ -1617,7 +1356,7 @@ export default function Roof3DViewer({
       const splitValPx = isRidgeAlongZ ? trueRidgeX / mPerPx : trueRidgeZ / mPerPx;
       const coordIdx = isRidgeAlongZ ? 0 : 1;
 
-      // Ensure any polygon spanning across the true ridge line is split into individual planar slope facets
+      // Ensure any polygon spanning across the ridge line is split into individual planar slope facets
       const effectivePolys: number[][][] = [];
       rawPolys.forEach((polyPx) => {
         if (polyPx.length < 3) return;
@@ -1625,8 +1364,8 @@ export default function Roof3DViewer({
         const minVal = Math.min(...vals);
         const maxVal = Math.max(...vals);
 
-        // If this polygon spans across the true ridge line
-        if (minVal < splitValPx - 10 && maxVal > splitValPx + 10) {
+        // If this polygon spans across the ridge line (with a margin, e.g. > 15px)
+        if (minVal < splitValPx - 15 && maxVal > splitValPx + 15) {
           const [neg, pos] = splitPolyByCoord(polyPx, coordIdx, splitValPx);
           if (neg.length >= 3) effectivePolys.push(neg);
           if (pos.length >= 3) effectivePolys.push(pos);
@@ -1635,10 +1374,9 @@ export default function Roof3DViewer({
         }
       });
 
-      // ---------------------------------------------------------
-      // C. Active Facet Overlays & Colored Boundary Wireframes
-      // Highlight Plane 1 (Blue), Plane 2 (Purple), etc. matching Step 2 Canvas Editor
-      // ---------------------------------------------------------
+      // Reconstruct each 3D Pitched Facet Mesh using True Mathematical Planar Slope
+      const facetMeshes: THREE.Mesh[] = [];
+
       effectivePolys.forEach((polyPx, polyIdx) => {
         if (polyPx.length < 3) return;
 
@@ -1646,49 +1384,22 @@ export default function Roof3DViewer({
           const xm = pt[0] * mPerPx - centerX;
           const zm = pt[1] * mPerPx - centerZ;
 
-          let ym = eaveHeight;
-          if (isRidgeAlongZ) {
-            const isWest = xm < ridgeSceneX;
-            const span = isWest ? leftSpan : rightSpan;
-            const distFromRidge = Math.abs(xm - ridgeSceneX);
-            const planeY = ridgeHeight - (distFromRidge / span) * (ridgeHeight - eaveHeight);
-            ym = Math.max(eaveHeight, Math.min(planeY, ridgeHeight));
-          } else {
-            const isRear = zm < ridgeSceneZ;
-            const span = isRear ? rearSpan : frontSpan;
-            const distFromRidge = Math.abs(zm - ridgeSceneZ);
-            const planeY = ridgeHeight - (distFromRidge / span) * (ridgeHeight - eaveHeight);
-            ym = Math.max(eaveHeight, Math.min(planeY, ridgeHeight));
-          }
+          const distFromRidge = isRidgeAlongZ
+            ? Math.abs(xm - ridgeSceneX)
+            : Math.abs(zm - ridgeSceneZ);
+
+          let ym = ridgeHeight - distFromRidge * Math.tan(tiltRad);
+          ym = Math.max(eaveHeight, Math.min(ym, ridgeHeight));
           return new THREE.Vector3(xm, ym, zm);
         });
 
-        const facetColorHex = FACET_PALETTE_HEX[polyIdx % FACET_PALETTE_HEX.length];
-
-        // 1. Facet Colored Boundary Wireframe (elevated +0.015m above tiles)
-        const linePts: THREE.Vector3[] = [];
-        for (let i = 0; i < pts3D.length; i++) {
-          const pA = pts3D[i].clone();
-          const pB = pts3D[(i + 1) % pts3D.length].clone();
-          pA.y += 0.015;
-          pB.y += 0.015;
-          linePts.push(pA, pB);
-        }
-        const lineGeom = new THREE.BufferGeometry().setFromPoints(linePts);
-        const lineMat = new THREE.LineBasicMaterial({
-          color: facetColorHex,
-          linewidth: 3,
-          transparent: true,
-          opacity: 0.95,
-        });
-        const borderLines = new THREE.LineSegments(lineGeom, lineMat);
-        scene.add(borderLines);
-
-        // 2. Translucent Solar Zone Tint Overlay (elevated +0.006m, zero z-fighting)
+        // Triangulate 3D polygon
         const shape2D = polyPx.map((p) => new THREE.Vector2(p[0] * mPerPx, p[1] * mPerPx));
         const triangles = THREE.ShapeUtils.triangulateShape(shape2D, []);
-        const facetGeom = new THREE.BufferGeometry();
+
+        const geom = new THREE.BufferGeometry();
         const positions: number[] = [];
+        const uvs: number[] = [];
 
         triangles.forEach((face) => {
           const v0 = pts3D[face[0]];
@@ -1703,22 +1414,32 @@ export default function Roof3DViewer({
 
           tri.forEach((vertIdx) => {
             const v = pts3D[vertIdx];
-            positions.push(v.x, v.y + 0.006, v.z);
+            positions.push(v.x, v.y, v.z);
+            uvs.push((v.x + 20) / 10.0, (v.z + 20) / 10.0);
           });
         });
 
-        facetGeom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-        facetGeom.computeVertexNormals();
+        geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        geom.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+        geom.computeVertexNormals();
 
-        const facetOverlayMat = new THREE.MeshBasicMaterial({
-          color: facetColorHex,
-          transparent: true,
-          opacity: 0.16,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        });
-        const facetMesh = new THREE.Mesh(facetGeom, facetOverlayMat);
+        const facetMesh = new THREE.Mesh(geom, roofMat);
+        facetMesh.castShadow = true;
+        facetMesh.receiveShadow = true;
         scene.add(facetMesh);
+        facetMeshes.push(facetMesh);
+
+        // Distinct Facet Color Edge Wireframe (matches Step 2 Plane 1-4)
+        const edges = new THREE.EdgesGeometry(geom, 12);
+        const facetColorHex = FACET_PALETTE_HEX[polyIdx % FACET_PALETTE_HEX.length];
+        const lineMat = new THREE.LineBasicMaterial({
+          color: facetColorHex,
+          linewidth: 2.5,
+          transparent: true,
+          opacity: 0.9,
+        });
+        const edgeLines = new THREE.LineSegments(edges, lineMat);
+        scene.add(edgeLines);
       });
 
       // Triangular Gable End Walls & Ridge Cap (Only rendered when pitch > 1° to properly support 0° Flat Roofs)
@@ -1751,18 +1472,18 @@ export default function Roof3DViewer({
           parent.add(board);
         };
         if (isRidgeAlongZ) {
-          const cap = rbox(0.3, 0.17, footprintD + overGable * 2, capMat, 0.06);
+          const cap = rbox(0.3, 0.17, footprintD, capMat, 0.06);
           cap.position.set(ridgeSceneX, ridgeHeight + 0.02, 0);
           scene.add(cap);
-          [-footprintD * 0.485, footprintD * 0.485].forEach((gz) => {
+          [-footprintD * 0.49, footprintD * 0.49].forEach((gz) => {
             addBarge(scene, -footprintW * 0.48, eaveHeight, ridgeSceneX, ridgeHeight, gz);
             addBarge(scene, ridgeSceneX, ridgeHeight, footprintW * 0.48, eaveHeight, gz);
           });
         } else {
-          const cap = rbox(footprintW + overGable * 2, 0.17, 0.3, capMat, 0.06);
+          const cap = rbox(footprintW, 0.17, 0.3, capMat, 0.06);
           cap.position.set(0, ridgeHeight + 0.02, ridgeSceneZ);
           scene.add(cap);
-          [-footprintW * 0.485, footprintW * 0.485].forEach((gx) => {
+          [-footprintW * 0.49, footprintW * 0.49].forEach((gx) => {
             const bg = new THREE.Group();
             bg.rotation.y = Math.PI / 2;
             bg.position.x = gx;
@@ -1845,27 +1566,21 @@ export default function Roof3DViewer({
 
         let distFromRidge = 0;
         let expectedNormal: THREE.Vector3;
-        let surfaceY = eaveHeight;
 
         if (isRidgeAlongZ) {
           const isWest = pCenterX < ridgeSceneX;
-          const span = isWest ? leftSpan : rightSpan;
-          const tilt = isWest ? leftTiltRad : rightTiltRad;
           const slopeDirX = isWest ? -1 : 1;
           distFromRidge = Math.abs(pCenterX - ridgeSceneX);
-          expectedNormal = new THREE.Vector3(slopeDirX * Math.sin(tilt), Math.cos(tilt), 0).normalize();
-          const planeY = ridgeHeight - (distFromRidge / span) * (ridgeHeight - eaveHeight);
-          surfaceY = Math.max(eaveHeight, Math.min(planeY, ridgeHeight));
+          expectedNormal = new THREE.Vector3(slopeDirX * Math.sin(tiltRad), Math.cos(tiltRad), 0).normalize();
         } else {
           const isRear = pCenterZ < ridgeSceneZ;
-          const span = isRear ? rearSpan : frontSpan;
-          const tilt = isRear ? rearTiltRad : frontTiltRad;
           const slopeDirZ = isRear ? -1 : 1;
           distFromRidge = Math.abs(pCenterZ - ridgeSceneZ);
-          expectedNormal = new THREE.Vector3(0, Math.cos(tilt), slopeDirZ * Math.sin(tilt)).normalize();
-          const planeY = ridgeHeight - (distFromRidge / span) * (ridgeHeight - eaveHeight);
-          surfaceY = Math.max(eaveHeight, Math.min(planeY, ridgeHeight));
+          expectedNormal = new THREE.Vector3(0, Math.cos(tiltRad), slopeDirZ * Math.sin(tiltRad)).normalize();
         }
+
+        const planeY = ridgeHeight - distFromRidge * Math.tan(tiltRad);
+        const surfaceY = Math.max(eaveHeight, Math.min(planeY, ridgeHeight));
 
         const panelGroup = new THREE.Group();
         // Position panel cleanly above roof surface (+0.09m realistic mounting rail standoff)
@@ -1961,7 +1676,7 @@ export default function Roof3DViewer({
         controls.dispose();
       }
     };
-  }, [geometry, layout, activeRoofStyle, scenePreset, ridgeOrientationOverride, imageUrl, imageWidth, imageHeight]);
+  }, [geometry, layout, activeRoofStyle, scenePreset]);
 
   // Camera Preset Views
   const setCameraView = (view: "top" | "iso" | "front" | "reset") => {
@@ -2134,9 +1849,7 @@ export default function Roof3DViewer({
               type="button"
               onClick={() => {
                 setScenePreset(key);
-                if (!imageUrl) {
-                  setActiveRoofStyle(SCENE_PRESETS[key].defaultRoof);
-                }
+                setActiveRoofStyle(SCENE_PRESETS[key].defaultRoof);
               }}
               aria-pressed={scenePreset === key}
               className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
@@ -2148,66 +1861,26 @@ export default function Roof3DViewer({
           ))}
         </div>
 
-        {/* Roof Material / Aerial Texture Toggle */}
+        {/* Roof Material Tone Toggle */}
         <div className="flex items-center gap-1 bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded-xl border border-slate-800 text-[11px] text-slate-400">
-          <span className="text-[10px] text-slate-500 font-semibold mr-1">Roof:</span>
-          {imageUrl && (
-            <button
-              type="button"
-              onClick={() => setActiveRoofStyle("aerial")}
-              className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
-                activeRoofStyle === "aerial" ? "bg-cyan-600 text-white shadow-sm" : "hover:text-slate-200"
-              }`}
-            >
-              📷 Aerial Photo
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setActiveRoofStyle("terracotta")}
-            className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
-              activeRoofStyle === "terracotta" ? "bg-amber-800 text-amber-200" : "hover:text-slate-200"
-            }`}
-          >
-            🧱 Terracotta
-          </button>
+          <span className="text-[10px] text-slate-500 font-semibold mr-1">Roof Tile:</span>
           <button
             type="button"
             onClick={() => setActiveRoofStyle("charcoal")}
-            className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+            className={`px-2 py-0.5 rounded font-bold transition-all ${
               activeRoofStyle === "charcoal" ? "bg-slate-700 text-white" : "hover:text-slate-200"
             }`}
           >
-            ⬛ Slate Grey
-          </button>
-        </div>
-
-        {/* Roof Ridge Orientation Control */}
-        <div className="flex items-center gap-1 bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded-xl border border-slate-800 text-[11px] text-slate-400">
-          <span className="text-[10px] text-slate-500 font-semibold mr-1">Ridge:</span>
-          <button
-            type="button"
-            onClick={() => setRidgeOrientationOverride("ew")}
-            title="Ridge runs Left-to-Right (East-West), slopes to Front & Rear"
-            className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
-              ridgeOrientationOverride === "ew" || ridgeOrientationOverride === "auto"
-                ? "bg-sky-600 text-white"
-                : "hover:text-slate-200"
-            }`}
-          >
-            ↔️ E-W (Horizontal)
+            Slate Grey
           </button>
           <button
             type="button"
-            onClick={() => setRidgeOrientationOverride("ns")}
-            title="Ridge runs Front-to-Back (North-South), slopes to Left & Right"
-            className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
-              ridgeOrientationOverride === "ns"
-                ? "bg-sky-600 text-white"
-                : "hover:text-slate-200"
+            onClick={() => setActiveRoofStyle("terracotta")}
+            className={`px-2 py-0.5 rounded font-bold transition-all ${
+              activeRoofStyle === "terracotta" ? "bg-amber-800 text-amber-200" : "hover:text-slate-200"
             }`}
           >
-            ↕️ N-S (Vertical)
+            Terracotta
           </button>
         </div>
 
