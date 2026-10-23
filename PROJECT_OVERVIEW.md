@@ -212,9 +212,9 @@ cd backend
 ## 8. Cloudflare R2 Production Configuration
 When deployed to cloud platforms (e.g. Render, Railway, Docker VPS), set these 4 environment variables:
 ```env
-R2_ACCOUNT_ID=e70adddfebd40ac1bf9dcadd8d021673
-R2_ACCESS_KEY_ID=3d9f5233b11dbed136605978cff47f24
-R2_SECRET_ACCESS_KEY=2ce96ea49a021b2fcf1146e6356324b47e8b6cfb982ddff6764cb232e66c1130
+R2_ACCOUNT_ID=<your_r2_account_id>
+R2_ACCESS_KEY_ID=<your_r2_access_key_id>
+R2_SECRET_ACCESS_KEY=<your_r2_secret_access_key>
 R2_BUCKET_NAME=solarready
 ```
-With these credentials active, all newly uploaded rooftop satellite photos and assessment JSON configurations are automatically preserved permanently in Cloudflare R2.
+With these credentials configured in the deployment environment (e.g., Render/Railway secrets), all newly uploaded rooftop satellite photos and assessment JSON configurations are automatically preserved permanently in Cloudflare R2.
