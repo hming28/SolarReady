@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Tuple
 from PIL import Image, ImageOps
 from app.config import STORAGE_DIR
+from app.services.cloud_storage import cloud_storage
 
 MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024  # 15 MB
 MAX_WORKING_DIMENSION = 2048  # Maximum pixels along longest edge
@@ -101,6 +102,13 @@ class ImageService:
             quality=92,
             optimize=True,
             # EXIF is excluded by default when saving without exif parameter
+        )
+
+        # Upload working copy to Cloudflare R2 for permanent cloud persistence
+        cloud_storage.upload_file(
+            key=f"images/{target_filename}",
+            data=target_path,
+            content_type="image/jpeg",
         )
 
         # Also save original copy for audit trail

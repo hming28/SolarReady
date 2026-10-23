@@ -44,3 +44,13 @@ ROBOFLOW_MODEL_ID = os.getenv("ROBOFLOW_MODEL_ID", "rooftop-segmentation-y0ovu/1
 # Google Gemini Vision API for Intelligent Rooftop Topology & Facet Detection
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# Cloudflare R2 Object Storage
+R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID", "")
+R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "")
+R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "")
+R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "solarready")
+R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL", "")
+if not R2_ENDPOINT_URL and R2_ACCOUNT_ID:
+    R2_ENDPOINT_URL = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+

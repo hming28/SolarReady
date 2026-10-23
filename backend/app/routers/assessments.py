@@ -23,6 +23,7 @@ from app.schemas import (
 )
 from app.services.image_service import image_service, ImageValidationError
 from app.services.storage import storage_service
+from app.services.cloud_storage import cloud_storage
 
 router = APIRouter(prefix="/api/assessments", tags=["Assessments"])
 
@@ -174,6 +175,16 @@ async def get_assessment_image_file(assessment_id: str):
             headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
         )
 
+    # If missing locally (e.g. server restart in cloud container), attempt recovery from Cloudflare R2
+    if cloud_storage.enabled:
+        r2_key = f"images/{assessment_id}_working.jpg"
+        if cloud_storage.download_file(r2_key, working_file):
+            return FileResponse(
+                working_file,
+                media_type="image/jpeg",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+            )
+
     # Check sample demo images
     sample_file = SAMPLE_ROOFS_DIR / f"{assessment_id}.jpg"
     if sample_file.exists():
@@ -259,6 +270,13 @@ async def crop_assessment_image(assessment_id: str, payload: CropRequest):
             # Save cropped image back to working path
             dest_path = STORAGE_DIR / f"{assessment_id}_working.jpg"
             cropped_img.save(dest_path, "JPEG", quality=95)
+
+            # Sync cropped image to Cloudflare R2
+            cloud_storage.upload_file(
+                key=f"images/{assessment_id}_working.jpg",
+                data=dest_path,
+                content_type="image/jpeg",
+            )
 
             # Update assessment image dimensions
             assessment.image.width_px = crop_w
@@ -392,6 +410,13 @@ async def rotate_assessment_image(assessment_id: str, payload: RotateRequest):
             # Save rotated image back to working path
             dest_path = STORAGE_DIR / f"{assessment_id}_working.jpg"
             rotated_img.save(dest_path, "JPEG", quality=95)
+
+            # Sync rotated image to Cloudflare R2
+            cloud_storage.upload_file(
+                key=f"images/{assessment_id}_working.jpg",
+                data=dest_path,
+                content_type="image/jpeg",
+            )
 
             # Update assessment image dimensions
             assessment.image.width_px = w1
