@@ -695,16 +695,24 @@ export default function CanvasEditor({
         )}
 
         {imageStatus === "failed" && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/95 text-white p-6 text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center">
-              <ShieldAlert className="w-6 h-6" />
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/95 text-white p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center">
+              <ShieldAlert className="w-7 h-7" />
             </div>
-            <div className="space-y-1">
-              <h3 className="font-bold text-sm">Unable to Load Rooftop Image</h3>
-              <p className="text-xs text-slate-400 max-w-md">
-                Failed to reach <code className="text-amber-400 break-all">{imageUrl}</code>.
+            <div className="space-y-1.5">
+              <h3 className="font-bold text-base">卫星屋顶图像丢失</h3>
+              <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+                服务器重启后上传的图像已从存储中清除。<br />
+                请重新上传您的屋顶卫星图像以继续编辑。
               </p>
+              <p className="text-[10px] text-slate-600 font-mono break-all">{imageUrl}</p>
             </div>
+            <a
+              href="/"
+              className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all shadow-lg"
+            >
+              <span>↩ 重新上传图像（返回首页）</span>
+            </a>
           </div>
         )}
 

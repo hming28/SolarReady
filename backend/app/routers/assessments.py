@@ -183,16 +183,10 @@ async def get_assessment_image_file(assessment_id: str):
             headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
         )
 
-    # Fallback to general sample if requested
-    generic_sample = SAMPLE_ROOFS_DIR / "sample_elmina_terrace.jpg"
-    if generic_sample.exists():
-        return FileResponse(
-            generic_sample,
-            media_type="image/jpeg",
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
-        )
-
-    raise HTTPException(status_code=404, detail="Image file not found.")
+    # No image found – return 404 so the frontend can prompt re-upload
+    # (Do NOT silently serve sample_elmina_terrace.jpg here; that causes
+    #  user projects to display the wrong roof image after a server restart.)
+    raise HTTPException(status_code=404, detail="Image file not found for this assessment. Please re-upload your roof image.")
 
 
 @router.get("/{assessment_id}", response_model=Assessment)

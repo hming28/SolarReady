@@ -3,7 +3,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Stage, Layer, Image as KonvaImage, Line, Rect, Group, Text } from "react-konva";
 import useImage from "@/lib/useImage";
-import { ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize2, ShieldAlert } from "lucide-react";
 import { RoofGeometry, LayoutResponse, PanelPlacement } from "@/lib/types";
 
 interface PanelOverlayProps {
@@ -116,6 +116,27 @@ export default function PanelOverlay({
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/70 backdrop-blur-xs text-white space-y-2 pointer-events-none">
           <div className="w-8 h-8 border-3 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
           <span className="text-xs text-slate-300 font-medium">Loading Solar Layout Preview...</span>
+        </div>
+      )}
+
+      {imageStatus === "failed" && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/95 text-white p-6 text-center space-y-4 pointer-events-auto">
+          <div className="w-14 h-14 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center">
+            <ShieldAlert className="w-7 h-7" />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="font-bold text-base">屋顶图像不可用</h3>
+            <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+              服务器重启后上传的图像已从存储中清除。<br />
+              请重新上传您的屋顶卫星图像以继续。
+            </p>
+          </div>
+          <a
+            href="/"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all shadow-lg"
+          >
+            ↩ 重新上传图像（返回首页）
+          </a>
         </div>
       )}
 
