@@ -2,7 +2,7 @@
   "id": "sample_setia_indah",
   "created_at": "2026-10-21T02:11:38.993361+00:00",
   "title": "Setia Indah 2-Storey Terrace",
-  "monthly_bill_rm": null,
+  "monthly_bill_rm": 380,
   "updated_at": "Oct 21, 2026",
   "is_saved": true,
   "location": {
@@ -398,7 +398,7 @@
     "policy_status": "verified_peninsular",
     "assumptions": [
       "System losses estimated at 14.0% (inverter efficiency, wiring, thermal coefficient, soiling)",
-      "Roof tilt assumed at 10.0\u00b0 optimal for equatorial latitude, facing south",
+      "Roof tilt assumed at 10.0° optimal for equatorial latitude, facing south",
       "TNB domestic retail tariff avoided (self-consumption offset): RM 0.4443/kWh",
       "Solar ATAP export credit rate applied (energy charge only): RM 0.2703/kWh",
       "Self-consumption ratio: 60%",

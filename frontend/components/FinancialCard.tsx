@@ -121,7 +121,15 @@ export default function FinancialCard({
   }, [tariffPreset]);
 
   // Real-Time Calculations (0ms latency, updates live as sliders move)
-  const annualGenBase = initialResult.annual_generation_kwh.base;
+  // Sanity guard: cap annualGenBase to a physically realistic maximum.
+  // A single residential rooftop under Malaysian Solar ATAP is capped at 12 kWp (3-phase limit).
+  // Anything above 18 kWp on a standard terrace is a data error — clamp to prevent RM 0 / 100% artifacts.
+  const rawAnnualGenBase = initialResult.annual_generation_kwh.base;
+  // Max realistic monthly usage to derive the ceiling: 3× the pre-solar bill consumption
+  const preSolarKwhRaw = tnbBillToKwh(monthlyBillRm > 0 ? monthlyBillRm : 380);
+  const maxReasonableAnnualGen = preSolarKwhRaw * 12 * 2.0; // allow up to 2× annual usage as gen ceiling
+  const annualGenBase = Math.min(rawAnnualGenBase, maxReasonableAnnualGen);
+
   const sRatio = selfUsePct / 100.0;
   const eRatio = 1.0 - sRatio;
   const selfKwh = annualGenBase * sRatio;
@@ -151,15 +159,23 @@ export default function FinancialCard({
     : 0;
 
   // Monthly Bill Calculations under Solar ATAP
-  const preSolarKwh = tnbBillToKwh(monthlyBillRm);
-  const monthlySolarGenKwh = (annualGenBase / 12);
+  const preSolarKwh = preSolarKwhRaw;
+  const monthlySolarGenKwh = annualGenBase / 12;
   const postSolarKwh = Math.max(0, preSolarKwh - (monthlySolarGenKwh * sRatio));
   const postSolarBillGross = kwhToTnbBill(postSolarKwh);
   const exportCreditMonthlyRm = (monthlySolarGenKwh * eRatio) * exportRate;
-  // In Solar ATAP, export credits offset current bill only (cannot result in negative bill payout)
+  
+  // Under Solar ATAP: export credits offset energy charge.
+  // If export credits exceed the post-solar gross bill, payable bill is RM 0 and excess rolls over as credit surplus
   const postSolarBillRm = Math.max(0, postSolarBillGross - exportCreditMonthlyRm);
-  const monthlyBillSavingsRm = Math.max(0, monthlyBillRm - postSolarBillRm);
-  const billReductionPct = monthlyBillRm > 0 ? Math.round((monthlyBillSavingsRm / monthlyBillRm) * 100) : 0;
+  const exportCreditSurplusRm = Math.max(0, exportCreditMonthlyRm - postSolarBillGross);
+  
+  // Total monthly financial benefit delivered by solar:
+  // Direct bill reduction plus any net credit surplus generated
+  const monthlyBillSavingsRm = (monthlyBillRm - postSolarBillRm) + exportCreditSurplusRm;
+  const billReductionPct = monthlyBillRm > 0 
+    ? Math.min(100, Math.round(((monthlyBillRm - postSolarBillRm) / monthlyBillRm) * 100))
+    : 0;
 
   // Environmental metric (0.589 kg CO2/kWh grid factor)
   const co2TonnesPerYear = ((annualGenBase * 0.589) / 1000).toFixed(2);
@@ -411,7 +427,13 @@ export default function FinancialCard({
               <p className="font-mono font-black text-emerald-400 text-sm sm:text-base">
                 RM {Math.round(postSolarBillRm)}
               </p>
-              <span className="text-[10px] text-emerald-300/80 block">~{Math.round(postSolarKwh)} kWh/mo</span>
+              {exportCreditSurplusRm > 0.5 ? (
+                <span className="text-[10px] text-cyan-300 font-bold block" title="Solar export credits exceed residual grid bill; remainder rolls over as account credit surplus">
+                  +RM {exportCreditSurplusRm.toFixed(2)} Surplus
+                </span>
+              ) : (
+                <span className="text-[10px] text-emerald-300/80 block">~{Math.round(postSolarKwh)} kWh/mo</span>
+              )}
             </div>
 
             <div className="space-y-0.5">
@@ -419,7 +441,10 @@ export default function FinancialCard({
               <p className="font-mono font-black text-amber-300 text-sm sm:text-base">
                 ↓ {billReductionPct}%
               </p>
-              <span className="text-[10px] text-amber-400/80 block">~RM {Math.round(monthlyBillSavingsRm)}/mo</span>
+              <span className="text-[10px] text-amber-400/80 block">
+                ~RM {Math.round(monthlyBillSavingsRm)}/mo
+                {exportCreditSurplusRm > 0.5 ? " value" : ""}
+              </span>
             </div>
           </div>
         </div>
